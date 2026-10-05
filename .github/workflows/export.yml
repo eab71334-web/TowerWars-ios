@@ -2,6 +2,8 @@ name: Build iOS App
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build-ios:
@@ -15,9 +17,8 @@ jobs:
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
-          use-dotnet: false
 
-      - name: Install Export Templates
+      - name: Setup Export Templates
         run: |
           GODOT_VERSION="4.3.stable"
           TEMPLATES_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
@@ -27,17 +28,12 @@ jobs:
           mv templates/* "$TEMPLATES_DIR/"
           rm -rf templates "Godot_v${GODOT_VERSION}_export_templates.tpz"
 
-      - name: Export Xcode Project from Godot
+      - name: Export Xcode Project
         run: |
           mkdir -p build/ios
           godot --headless --export-release "iOS" build/ios/TowerWars.xcodeproj
 
-      - name: Setup Xcode Environment
-        uses: xcode-actions/configure-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Build App (Simulator / Unsigned IPA)
+      - name: Build Xcode App
         run: |
           cd build/ios
           xcodebuild build \
@@ -49,14 +45,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Create IPA Package
+      - name: Create Unsigned IPA
         run: |
           cd build/ios
           mkdir -p Payload
-          mv build/Release-iphoneos/TowerWars.app Payload/
+          mv build/Release-iphoneos/TowerWars.app Payload/ 2>/dev/null || mv build/Release-iphoneos/*.app Payload/
           zip -r TowerWars.ipa Payload
 
-      - name: Upload Artifact
+      - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TowerWars-iOS-IPA
