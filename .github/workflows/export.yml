@@ -40,7 +40,7 @@ jobs:
           export_filter="all_resources"
           include_filter=""
           exclude_filter=""
-          export_path="export/ios/TowerWars.xcodeproj"
+          export_path="TowerWars.xcodeproj"
           script_export_mode=1
 
           [preset.0.options]
@@ -56,12 +56,10 @@ jobs:
 
       - name: Export Xcode Project from Godot
         run: |
-          mkdir -p export/ios
-          godot --headless --export-release "iOS" export/ios/TowerWars.xcodeproj
+          godot --headless --export-release "iOS" TowerWars.xcodeproj
 
       - name: Build Xcode Project
         run: |
-          cd export/ios
           xcodebuild build \
             -project TowerWars.xcodeproj \
             -scheme TowerWars \
@@ -73,7 +71,6 @@ jobs:
 
       - name: Create Unsigned IPA
         run: |
-          cd export/ios
           mkdir -p Payload
           mv build/Release-iphoneos/TowerWars.app Payload/ 2>/dev/null || mv build/Release-iphoneos/*.app Payload/ 2>/dev/null || mv build/Build/Products/Release-iphoneos/*.app Payload/
           zip -r TowerWars.ipa Payload
@@ -82,4 +79,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TowerWars-iOS-IPA
-          path: export/ios/TowerWars.ipa
+          path: TowerWars.ipa
