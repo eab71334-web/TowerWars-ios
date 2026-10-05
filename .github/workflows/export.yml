@@ -1,9 +1,11 @@
-name: Build iOS App
+name: "Export and Build iOS App"
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 
 jobs:
   export-and-build:
@@ -19,51 +21,34 @@ jobs:
           version: 4.3.0
           use-dotnet: false
 
-      - name: Download & Extract Official Export Templates
-        run: |
-          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
-          mkdir -p "$TEMPLATE_DIR"
-          curl -fL -o templates.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-          unzip -q templates.tpz
-          mv templates/* "$TEMPLATE_DIR/"
-          rm -rf templates templates.tpz
-
-      - name: Ensure Dummy Icon Exists
-        run: |
-          if [ ! -f "icon.svg" ]; then
-            echo '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="#478cbf"/></svg>' > icon.svg
-          fi
-
-      - name: Create export directory
-        run: mkdir -p build/ios
-
       - name: Import Godot Assets
         run: |
-          godot --headless --editor --quit || true
+          godot --headless --verbose --editor --quit
 
       - name: Export Xcode Project from Godot
         run: |
-          godot --headless --verbose --export-release "iOS" build/ios/game.xcodeproj
+          mkdir -p build/ios
+          godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj
 
-      - name: Build Xcode Project Unsigned
+      - name: Build Unsigned IPA with Xcode
         run: |
-          xcodebuild build \
-            -project build/ios/game.xcodeproj \
+          cd build/ios
+          xcodebuild -project game.xcodeproj \
             -scheme game \
             -sdk iphoneos \
-            -configuration Release \
-            CODE_SIGN_IDENTITY="" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
 
-      - name: Create Unsigned IPA
-        run: |
           mkdir -p Payload
-          cp -R build/ios/build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || true
+          mv build/Debug-iphoneos/game.app Payload/
           zip -r game.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: iOS-IPA
-          path: game.ipa
+          name: iOS-Unsigned-Build
+          path: build/ios/game.ipa
