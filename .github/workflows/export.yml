@@ -45,6 +45,14 @@ jobs:
 
           [preset.0.options]
           architectures/arm64=true
+          application/bundle_identifier="com.towerwars.game"
+          application/signature="TOWW"
+          application/short_version="1.0"
+          application/version="1.0"
+          code_sign/code_sign_identity=""
+          code_sign/provisioning_profile_uuid=""
+          code_sign/team_id="1234567890"
+          code_sign/identity_type=1
           EOF
 
       - name: Export Xcode Project from Godot
