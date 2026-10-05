@@ -6,25 +6,19 @@ on:
     branches: [ main ]
 
 jobs:
-  export-and-build:
+  build-ios:
     runs-on: macos-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Godot Engine
+      - name: Setup Godot Engine & Templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
-
-      - name: Setup Export Templates
-        run: |
-          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
-          curl -sL https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -o templates.zip
-          unzip -q templates.zip
-          mv templates/* "$HOME/Library/Application Support/Godot/export_templates/4.3.stable/"
-          rm -rf templates templates.zip
+          use-dotnet: false
+          download-templates: true
 
       - name: Export Xcode Project from Godot
         run: |
