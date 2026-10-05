@@ -6,36 +6,24 @@ on:
     branches: [ main ]
 
 jobs:
-  build-ios:
+  export-and-build:
     runs-on: macos-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Godot Engine
-        uses: chickensoft-games/setup-godot@v2
+      - name: Export iOS Project from Godot
+        uses: firebelley/godot-export@v6
         with:
-          version: 4.3.0
+          godot_version: 4.3
+          export_debug: false
+          relative_project_path: ./
+          archive_output: false
 
-      - name: Download & Install Export Templates
+      - name: Build Xcode Project
         run: |
-          GODOT_VERSION="4.3.stable"
-          TEMPLATES_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
-          mkdir -p "$TEMPLATES_DIR"
-          curl -fL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
-          unzip templates.tpz
-          mv templates/* "$TEMPLATES_DIR/"
-          rm -rf templates templates.tpz
-
-      - name: Export Xcode Project from Godot
-        run: |
-          mkdir -p export/ios
-          godot --headless --export-release "iOS" export/ios/TowerWars.xcodeproj
-
-      - name: Build App with Xcode
-        run: |
-          cd export/ios
+          cd build/ios
           xcodebuild build \
             -project TowerWars.xcodeproj \
             -scheme TowerWars \
@@ -47,13 +35,13 @@ jobs:
 
       - name: Create Unsigned IPA
         run: |
-          cd export/ios
+          cd build/ios
           mkdir -p Payload
           mv build/Release-iphoneos/TowerWars.app Payload/ 2>/dev/null || mv build/Release-iphoneos/*.app Payload/ 2>/dev/null || mv build/Build/Products/Release-iphoneos/*.app Payload/
           zip -r TowerWars.ipa Payload
 
-      - name: Upload IPA Artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: TowerWars-iOS-IPA
-          path: export/ios/TowerWars.ipa
+          path: build/ios/TowerWars.ipa
