@@ -28,18 +28,23 @@ jobs:
           mv templates/* "$TEMPLATE_DIR/"
           rm -rf templates templates.tpz
 
-      - name: Create export folder
-        run: mkdir -p build/ios
+      - name: Create export directory structure
+        run: |
+          mkdir -p build/ios
+
+      - name: Run Godot Asset Import Step
+        run: |
+          godot --headless --editor --quit || true
 
       - name: Export Xcode Project from Godot
         run: |
-          godot --headless --export-release "iOS" build/ios/TowerWars.xcodeproj
+          godot --headless --export-release "iOS" "build/ios/TowerWars.xcodeproj"
 
       - name: Build Xcode Project
         run: |
           xcodebuild build \
-            -project build/ios/TowerWars.xcodeproj \
-            -scheme TowerWars \
+            -project "build/ios/TowerWars.xcodeproj" \
+            -scheme "TowerWars" \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
@@ -49,7 +54,7 @@ jobs:
       - name: Create Unsigned IPA
         run: |
           mkdir -p Payload
-          mv build/Release-iphoneos/TowerWars.app Payload/ 2>/dev/null || mv build/Release-iphoneos/*.app Payload/ 2>/dev/null || mv build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || mv build/ios/build/Release-iphoneos/*.app Payload/
+          cp -R build/ios/build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || true
           zip -r TowerWars.ipa Payload
 
       - name: Upload IPA Artifact
