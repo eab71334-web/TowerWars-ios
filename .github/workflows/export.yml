@@ -39,7 +39,7 @@ jobs:
         run: |
           godot --headless --verbose --export-release "iOS" build/ios/TowerWars.xcodeproj
 
-      - name: Build Xcode Project
+      - name: Build Xcode Project Unsigned
         run: |
           xcodebuild build \
             -project build/ios/TowerWars.xcodeproj \
