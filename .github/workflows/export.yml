@@ -49,17 +49,15 @@ jobs:
           application/signature="TOWW"
           application/short_version="1.0"
           application/version="1.0"
-          application/code_sign/apple_team_id="1234567890"
-          application/code_sign/provisioning_profile_uuid=""
-          application/code_sign/identity=""
-          application/export_type=0
+          application/app_store_team_id="1234567890"
+          application/provisioning_profile_uuid=""
           code_sign/identity_type=0
           EOF
 
       - name: Export Xcode Project from Godot
         run: |
           mkdir -p export/ios
-          godot --headless --export-release "iOS" export/ios/TowerWars.xcodeproj || true
+          godot --headless --export-release "iOS" export/ios/TowerWars.xcodeproj
 
       - name: Build Xcode Project
         run: |
