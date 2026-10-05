@@ -31,13 +31,13 @@ jobs:
       - name: Create export directory
         run: mkdir -p build/ios
 
-      - name: Run Godot Asset Import Step
+      - name: Import Godot Assets First
         run: |
           godot --headless --editor --quit || true
 
       - name: Export Xcode Project from Godot
         run: |
-          godot --headless --export-release "iOS" build/ios/TowerWars.xcodeproj
+          godot --headless --verbose --export-release "iOS" build/ios/TowerWars.xcodeproj
 
       - name: Build Xcode Project
         run: |
