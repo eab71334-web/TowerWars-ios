@@ -49,12 +49,11 @@ jobs:
           application/signature="TOWW"
           application/short_version="1.0"
           application/version="1.0"
-          application/code_sign/team_id="AAAAAAAAAA"
+          application/code_sign/apple_team_id="1234567890"
           application/code_sign/provisioning_profile_uuid=""
           application/code_sign/identity=""
           application/export_type=0
           code_sign/identity_type=0
-          code_sign/apple_team_id="AAAAAAAAAA"
           EOF
 
       - name: Export Xcode Project from Godot
