@@ -26,14 +26,12 @@ jobs:
           TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
           mkdir -p "$TEMPLATE_DIR"
           
-          # تحميل قالب التصدير الرسمي الموحد لـ Godot 4.3
+          # تحميل وفك قالب التصدير الرسمي لـ Godot 4.3
           curl -L -o /tmp/templates.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-          
-          # فك ملف الـ tpz (وهو في الأصل ملف zip) واستخراج محتوياته
           unzip -q /tmp/templates.tpz -d /tmp/godot_templates
           
-          # نقل محتويات القوالب إلى المجلد المخصص لـ Godot
-          mv /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
+          # نسخ ملف ios.zip مباشرة إلى المجلد الصحيح لكي يعترف به المحرك
+          cp /tmp/godot_templates/templates/ios.zip "$TEMPLATE_DIR/"
           ls -la "$TEMPLATE_DIR"
 
       - name: Import Godot Assets
