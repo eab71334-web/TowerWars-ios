@@ -13,12 +13,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Godot Engine & Templates
+      - name: Setup Godot Engine
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
           use-dotnet: false
-          download-templates: true
+
+      - name: Download & Extract Official Export Templates
+        run: |
+          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          curl -fL -o templates.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -q templates.tpz
+          mv templates/* "$TEMPLATE_DIR/"
+          rm -rf templates templates.tpz
 
       - name: Configure Export Presets
         run: |
@@ -34,7 +42,7 @@ jobs:
           exclude_filter=""
           export_path="export/ios/TowerWars.xcodeproj"
           script_export_mode=1
-          
+
           [preset.0.options]
           architectures/arm64=true
           EOF
