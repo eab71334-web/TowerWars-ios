@@ -28,9 +28,8 @@ jobs:
           mv templates/* "$TEMPLATE_DIR/"
           rm -rf templates templates.tpz
 
-      - name: Create export directory structure
-        run: |
-          mkdir -p build/ios
+      - name: Create export directory
+        run: mkdir -p build/ios
 
       - name: Run Godot Asset Import Step
         run: |
@@ -38,13 +37,13 @@ jobs:
 
       - name: Export Xcode Project from Godot
         run: |
-          godot --headless --export-release "iOS" "build/ios/TowerWars.xcodeproj"
+          godot --headless --export-release "iOS" build/ios/TowerWars.xcodeproj
 
       - name: Build Xcode Project
         run: |
           xcodebuild build \
-            -project "build/ios/TowerWars.xcodeproj" \
-            -scheme "TowerWars" \
+            -project build/ios/TowerWars.xcodeproj \
+            -scheme TowerWars \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
