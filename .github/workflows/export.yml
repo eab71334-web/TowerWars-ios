@@ -28,22 +28,28 @@ jobs:
           mv templates/* "$TEMPLATE_DIR/"
           rm -rf templates templates.tpz
 
+      - name: Ensure Dummy Icon Exists
+        run: |
+          if [ ! -f "icon.svg" ]; then
+            echo '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="#478cbf"/></svg>' > icon.svg
+          fi
+
       - name: Create export directory
         run: mkdir -p build/ios
 
-      - name: Import Godot Assets First
+      - name: Import Godot Assets
         run: |
           godot --headless --editor --quit || true
 
       - name: Export Xcode Project from Godot
         run: |
-          godot --headless --verbose --export-release "iOS" build/ios/TowerWars.xcodeproj
+          godot --headless --verbose --export-release "iOS" build/ios/game.xcodeproj
 
       - name: Build Xcode Project Unsigned
         run: |
           xcodebuild build \
-            -project build/ios/TowerWars.xcodeproj \
-            -scheme TowerWars \
+            -project build/ios/game.xcodeproj \
+            -scheme game \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGN_IDENTITY="" \
@@ -54,10 +60,10 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/ios/build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Release-iphoneos/*.app Payload/ 2>/dev/null || cp -R build/Build/Products/Release-iphoneos/*.app Payload/ 2>/dev/null || true
-          zip -r TowerWars.ipa Payload
+          zip -r game.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TowerWars-iOS-IPA
-          path: TowerWars.ipa
+          name: iOS-IPA
+          path: game.ipa
