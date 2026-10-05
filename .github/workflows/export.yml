@@ -21,6 +21,16 @@ jobs:
           version: 4.3.0
           use-dotnet: false
 
+      - name: Download and Install Godot iOS Export Templates
+        run: |
+          mkdir -p ~/Library/Application\ Support/Godot/export_templates/4.3.stable/
+          curl -L -o ~/Library/Application\ Support/Godot/export_templates/4.3.stable/ios.zip \
+            https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          
+          # فك ضغط قالب الـ iOS في مكانه الصحيح
+          cd ~/Library/Application\ Support/Godot/export_templates/4.3.stable/
+          unzip -o ios.zip
+
       - name: Import Godot Assets
         run: |
           godot --headless --verbose --editor --quit
