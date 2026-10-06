@@ -69,6 +69,36 @@ jobs:
           PY
           grep -n -E "config/name|etc2_astc|rendering_method|run/main_scene" project.godot || true
 
+      - name: Create app icon PNG
+        run: |
+          mkdir -p build
+          # حوّل icon.svg إلى PNG 1024x1024 (qlmanage موجود في macOS)
+          if [ -f icon.svg ]; then
+            qlmanage -t -s 1024 -o /tmp icon.svg >/dev/null 2>&1 || true
+            if [ -f /tmp/icon.svg.png ]; then
+              cp /tmp/icon.svg.png app_icon.png
+            fi
+          fi
+          # لو فشل التحويل، اصنع أيقونة زرقاء بسيطة بـ Python
+          if [ ! -s app_icon.png ]; then
+            echo "Fallback: generating icon with Python"
+            python3 - <<'PY'
+          import zlib, struct
+          W = H = 1024
+          row = b"\x00" + bytes([13, 25, 64, 255]) * W
+          raw = row * H
+          def chunk(t, d):
+              c = struct.pack(">I", len(d)) + t + d
+              return c + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+          png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
+          open("app_icon.png", "wb").write(png)
+          PY
+          fi
+          # أيقونة التطبيق لازم تكون بدون شفافية
+          sips -s format png -s formatOptions default app_icon.png --out app_icon.png >/dev/null 2>&1 || true
+          ls -la app_icon.png
+          sips -g pixelWidth -g pixelHeight -g hasAlpha app_icon.png || true
+
       - name: Check main scene exists
         run: |
           mkdir -p build
@@ -82,8 +112,6 @@ jobs:
               FILE="${MAIN#res://}"
               if [ -f "$FILE" ]; then echo "OK: scene exists"; else echo "PROBLEM: scene NOT found: $FILE"; fi
             fi
-            echo "=== GDExtension files ==="
-            find . -name "*.gdextension" -not -path "./build/*" -not -path "./.git/*" || true
             echo "=== Project files ==="
             find . -type f \( -name "*.tscn" -o -name "*.scn" -o -name "*.gd" \) -not -path "./build/*" -not -path "./.git/*" -not -path "./.godot/*" | head -50
           } 2>&1 | tee build/diagnostics.txt | fold -w 55
@@ -95,7 +123,11 @@ jobs:
           sed -i '' 's|application/bundle_identifier=".*"|application/bundle_identifier="com.eab71334.towerwars"|' export_presets.cfg
           sed -i '' 's|application/export_project_only=.*|application/export_project_only=true|' export_presets.cfg
           sed -i '' 's|^export_path=".*"|export_path="build/ios/game.xcodeproj"|' export_presets.cfg
+          # اكتب مسار الأيقونة في كل حقول الأيقونات (بدون _dark و _tinted)
+          sed -i '' -E 's|^(icons/[a-z_]+[0-9]+x[0-9]+)=""|\1="res://app_icon.png"|' export_presets.cfg
           grep -E "custom_template|bundle_identifier|export_path|export_project_only|targeted_device" export_presets.cfg
+          echo "--- icons ---"
+          grep -E "^icons/" export_presets.cfg | grep -v '=""' | head -20
 
       - name: Import Godot Assets
         run: godot --headless --verbose --editor --quit || true
@@ -120,23 +152,32 @@ jobs:
           ls -la build/ios
           ls build/ios/*.pck
 
+      - name: Repair empty JSON files
+        run: |
+          cd build/ios
+          echo "=== Contents.json files ==="
+          find . -name "*.json" -not -path "./out/*" | while read f; do
+            SIZE=$(wc -c < "$f" | tr -d ' ')
+            if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/dev/null; then
+              echo "BAD ($SIZE bytes): $f"
+              printf '{\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n' > "$f"
+              echo "  -> repaired"
+            else
+              echo "OK  ($SIZE bytes): $f"
+            fi
+          done 2>&1 | fold -w 55
+
       - name: Inspect Xcode project
         run: |
           cd build/ios
           {
-            echo "=== Files in build/ios ==="
-            ls -la
             echo "=== xcodeproj found ==="
             find . -maxdepth 2 -name "*.xcodeproj"
             PROJ=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
-            echo "=== Inside $PROJ ==="
-            ls -la "$PROJ"
-            echo "=== pbxproj size ==="
-            ls -la "$PROJ/project.pbxproj" || echo "NO project.pbxproj"
             echo "=== pbxproj lint ==="
             plutil -lint "$PROJ/project.pbxproj" || true
-            echo "=== pbxproj head ==="
-            head -n 15 "$PROJ/project.pbxproj" || true
+            echo "=== xcassets ==="
+            find . -name "*.xcassets" -not -path "./out/*" -exec sh -c 'echo "$1"; ls -la "$1"' _ {} \;
             echo "=== PCK ==="
             ls -la *.pck
           } 2>&1 | tee -a ../diagnostics.txt | fold -w 55
@@ -149,8 +190,6 @@ jobs:
           echo "Project: $PROJ"
           echo "Name: $NAME"
           test -f "$PROJ/project.pbxproj"
-
-          xcodebuild -list -project "$PROJ" 2>&1 | fold -w 55 || true
 
           set +e
           xcodebuild -project "$PROJ" \
@@ -166,7 +205,7 @@ jobs:
           set -e
 
           echo "=========== XCODE ERRORS (wrapped) ==========="
-          grep -n -i -E "error|damaged|reason" ../xcodebuild.log | fold -w 55 | head -30 || true
+          grep -n -i -E "error:|damaged|reason" ../xcodebuild.log | fold -w 55 | head -30 || true
           echo "=============================================="
           [ $CODE -eq 0 ] || exit $CODE
 
