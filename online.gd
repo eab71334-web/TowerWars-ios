@@ -1,5 +1,6 @@
 extends Node2D
 
+# ضع دومين Railway هنا بدون https:// وبدون / في الآخر
 const SERVER_URL := "wss://CHANGE-ME.up.railway.app"
 const W := 720.0
 const TW := 360.0
@@ -7,6 +8,7 @@ const BLOCK_H := 48.0
 const START_W := 150.0
 const PERFECT_TOL := 8.0
 const ROUND_TIME := 90.0
+const CONNECT_TIMEOUT := 10.0
 
 class Tower:
 	var blocks: Array = []
@@ -36,6 +38,7 @@ var time_left := ROUND_TIME
 var pos_t := 0.0
 var msg_t := 0.0
 var end_ms := 0
+var connect_t := 0.0
 
 var timer_label: Label
 var opp_score: Label
@@ -76,11 +79,21 @@ func _ready() -> void:
 	_init_tower(player)
 	_init_tower(opp)
 	timer_label.text = ""
+
+	if SERVER_URL.contains("CHANGE-ME"):
+		_fail("لم تضع دومين الخادم\nعدّل SERVER_URL في online.gd")
+		return
+
 	msg_label.text = "جاري الاتصال..."
 	var err := ws.connect_to_url(SERVER_URL)
 	if err != OK:
-		state = "offline"
-		msg_label.text = "تعذر الاتصال بالخادم"
+		_fail("تعذر الاتصال بالخادم\nرمز الخطأ: %d" % err)
+
+func _fail(text: String) -> void:
+	state = "offline"
+	end_ms = Time.get_ticks_msec()
+	msg_label.size.y = 200.0
+	msg_label.text = text + "\nالمس للمحاولة من جديد"
 
 func _leave() -> void:
 	ws.close()
@@ -204,8 +217,15 @@ func _on_msg(m: Dictionary) -> void:
 		_end("الخصم انسحب: فزت!")
 
 func _process(delta: float) -> void:
+	if state == "offline" or state == "error":
+		_anim(player, delta)
+		_anim(opp, delta)
+		queue_redraw()
+		return
+
 	ws.poll()
 	var st := ws.get_ready_state()
+
 	if st == WebSocketPeer.STATE_OPEN:
 		if state == "connecting":
 			_on_open()
@@ -213,11 +233,16 @@ func _process(delta: float) -> void:
 			var m = JSON.parse_string(ws.get_packet().get_string_from_utf8())
 			if typeof(m) == TYPE_DICTIONARY:
 				_on_msg(m)
-	elif st == WebSocketPeer.STATE_CLOSED and state != "over" and state != "offline" and state != "error":
-		state = "offline"
-		end_ms = Time.get_ticks_msec()
-		msg_label.size.y = 160.0
-		msg_label.text = "انقطع الاتصال\nالمس للمحاولة من جديد"
+	elif st == WebSocketPeer.STATE_CONNECTING:
+		connect_t += delta
+		if connect_t > CONNECT_TIMEOUT:
+			ws.close()
+			_fail("الخادم لا يستجيب\nتأكد من الدومين و Railway")
+	elif st == WebSocketPeer.STATE_CLOSED and state != "over":
+		var reason := "انقطع الاتصال"
+		if state == "connecting":
+			reason = "تعذر الاتصال بالخادم\nرمز الإغلاق: %d" % ws.get_close_code()
+		_fail(reason)
 
 	if state == "playing":
 		time_left -= delta
