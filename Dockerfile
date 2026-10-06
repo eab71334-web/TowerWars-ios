@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget unzip ca-certificates \
-    libfontconfig1 libx11-6 libxcursor1 libxinerama1 libxrandr1 libxi6 \
+    libfontconfig1 libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 \
     libgl1 libasound2 libpulse0 libudev1 \
     && rm -rf /var/lib/apt/lists/*
 
