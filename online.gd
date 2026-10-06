@@ -30,6 +30,8 @@ var player: Tower
 var opp: Tower
 var ws := WebSocketPeer.new()
 var state := "connecting"
+var mode := "random"
+var code := ""
 var time_left := ROUND_TIME
 var pos_t := 0.0
 var msg_t := 0.0
@@ -44,6 +46,8 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color(0.05, 0.1, 0.25))
 	vh = get_viewport_rect().size.y
 	base_y = vh - 160.0
+	mode = str(Engine.get_meta("mode", "random"))
+	code = str(Engine.get_meta("code", ""))
 
 	player = Tower.new()
 	player.ox = TW
@@ -153,10 +157,31 @@ func _start() -> void:
 	_say("ابدأ! المس لإنزال الكتلة", 2.0)
 	_update_ui()
 
+func _on_open() -> void:
+	state = "waiting"
+	if mode == "create":
+		_send({"t": "create"})
+		msg_label.text = "جاري إنشاء اللعبة..."
+	elif mode == "join":
+		_send({"t": "join", "code": code})
+		msg_label.text = "جاري الدخول..."
+	else:
+		_send({"t": "find"})
+		msg_label.text = "نبحث عن خصم..."
+
 func _on_msg(m: Dictionary) -> void:
 	var t: String = str(m.get("t", ""))
 	if t == "waiting":
 		msg_label.text = "نبحث عن خصم..."
+	elif t == "created":
+		msg_label.size.y = 220.0
+		msg_label.text = "كود اللعبة: %s\nأعطه لصاحبك وانتظره" % str(m.get("code", ""))
+	elif t == "error":
+		state = "error"
+		end_ms = Time.get_ticks_msec()
+		msg_label.size.y = 160.0
+		msg_label.text = "%s\nالمس للرجوع" % str(m.get("m", "خطأ"))
+		ws.close()
 	elif t == "start":
 		_start()
 	elif state != "playing":
@@ -183,14 +208,12 @@ func _process(delta: float) -> void:
 	var st := ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
 		if state == "connecting":
-			state = "waiting"
-			_send({"t": "find"})
-			msg_label.text = "نبحث عن خصم..."
+			_on_open()
 		while ws.get_available_packet_count() > 0:
 			var m = JSON.parse_string(ws.get_packet().get_string_from_utf8())
 			if typeof(m) == TYPE_DICTIONARY:
 				_on_msg(m)
-	elif st == WebSocketPeer.STATE_CLOSED and state != "over" and state != "offline":
+	elif st == WebSocketPeer.STATE_CLOSED and state != "over" and state != "offline" and state != "error":
 		state = "offline"
 		end_ms = Time.get_ticks_msec()
 		msg_label.size.y = 160.0
@@ -240,8 +263,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		if state == "playing":
 			if not player.dead:
 				_drop()
-		elif state == "over" or state == "offline":
-			if Time.get_ticks_msec() - end_ms > 700:
+		elif Time.get_ticks_msec() - end_ms > 700:
+			if state == "error":
+				get_tree().change_scene_to_file("res://friends.tscn")
+			elif state == "over" or state == "offline":
 				get_tree().reload_current_scene()
 
 func _spawn_fall(t: Tower, x: float, y: float, w: float, c: Color) -> void:
