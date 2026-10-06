@@ -7,6 +7,8 @@ on:
 
 env:
   GODOT_VERSION: "4.5"
+  # true = يحوّل الـ renderer إلى Compatibility (الأضمن على iOS)
+  FORCE_COMPAT_RENDERER: "true"
 
 jobs:
   export-and-build:
@@ -43,24 +45,32 @@ jobs:
 
           test -f "$TEMPLATE_DIR/ios.zip"
           echo "IOS_ZIP=$TEMPLATE_DIR/ios.zip" >> "$GITHUB_ENV"
-          ls -la "$TEMPLATE_DIR"
 
-      - name: Fix project settings (ETC2/ASTC)
+      - name: Fix project settings
         run: |
           python3 - <<'PY'
-          import re
+          import os, re
           p = "project.godot"
           s = open(p, encoding="utf-8").read()
-          line = "textures/vram_compression/import_etc2_astc=true"
-          if "textures/vram_compression/import_etc2_astc" in s:
-              s = re.sub(r"textures/vram_compression/import_etc2_astc=.*", line, s)
-          elif "[rendering]" in s:
-              s = s.replace("[rendering]\n", "[rendering]\n\n" + line + "\n", 1)
-          else:
-              s += "\n[rendering]\n\n" + line + "\n"
+
+          def set_key(s, section, key, value):
+              line = f"{key}={value}"
+              if re.search(rf"^{re.escape(key)}=.*$", s, flags=re.M):
+                  return re.sub(rf"^{re.escape(key)}=.*$", line, s, flags=re.M)
+              if f"[{section}]" in s:
+                  return s.replace(f"[{section}]\n", f"[{section}]\n\n{line}\n", 1)
+              return s + f"\n[{section}]\n\n{line}\n"
+
+          s = set_key(s, "rendering", "textures/vram_compression/import_etc2_astc", "true")
+          if os.environ.get("FORCE_COMPAT_RENDERER") == "true":
+              s = set_key(s, "rendering", "renderer/rendering_method.mobile", '"gl_compatibility"')
+              s = set_key(s, "rendering", "renderer/rendering_method", '"gl_compatibility"')
+
           open(p, "w", encoding="utf-8").write(s)
           PY
-          grep -n "etc2_astc" project.godot
+          grep -n -E "etc2_astc|rendering_method|run/main_scene" project.godot || true
+          echo "--- GDExtension files ---"
+          find . -name "*.gdextension" -not -path "./build/*" -exec sh -c 'echo "== $1"; cat "$1"' _ {} \; || true
 
       - name: Fix export preset
         run: |
@@ -69,7 +79,7 @@ jobs:
           sed -i '' 's|application/bundle_identifier=".*"|application/bundle_identifier="com.eab71334.towerwars"|' export_presets.cfg
           sed -i '' 's|application/export_project_only=.*|application/export_project_only=true|' export_presets.cfg
           sed -i '' 's|^export_path=".*"|export_path="build/ios/game.xcodeproj"|' export_presets.cfg
-          grep -E "custom_template|bundle_identifier|team_id|export_path|export_project_only|targeted_device" export_presets.cfg
+          grep -E "custom_template|bundle_identifier|export_path|export_project_only|targeted_device" export_presets.cfg
 
       - name: Import Godot Assets
         run: godot --headless --verbose --editor --quit || true
@@ -82,16 +92,19 @@ jobs:
           CODE=$?
           set -e
 
-          echo "=========== CONFIG ERROR (wrapped) ==========="
-          grep -n -A6 -i "configuration errors" export.log | fold -w 55 || true
-          echo "=========== ALL ERRORS (wrapped) ==========="
-          grep -n -i -E "error|invalid|missing|not found|template" export.log | fold -w 55 || true
-          echo "=============================================="
+          echo "=========== ERRORS (wrapped) ==========="
+          grep -n -i -E "error|invalid|missing|not found" export.log | fold -w 55 || true
+          echo "========================================"
 
           if [ ! -d build/ios/game.xcodeproj ]; then
-            echo "Export failed, no xcodeproj created (exit code $CODE)"
+            echo "Export failed (exit code $CODE)"
             exit 1
           fi
+
+          echo "--- Files in build/ios ---"
+          ls -la build/ios
+          ls -la build/ios/*.pck
+          test -f build/ios/game.pck
 
       - name: Upload export log
         if: always()
@@ -115,7 +128,14 @@ jobs:
 
           mkdir -p Payload
           cp -r out/Build/Products/Debug-iphoneos/game.app Payload/
-          zip -r game.ipa Payload
+          zip -qr game.ipa Payload
+
+      - name: Verify IPA contents
+        run: |
+          cd build/ios
+          echo "--- pck / frameworks inside IPA ---"
+          unzip -l game.ipa | grep -i -E "\.pck|\.dylib|\.framework/|\.gdextension" | fold -w 55 || true
+          unzip -l game.ipa | grep -qi "\.pck" || (echo "NO PCK IN IPA" && exit 1)
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
