@@ -1,7 +1,7 @@
 extends Node2D
 
 # ضع دومين Railway هنا بدون https:// وبدون / في الآخر
-const SERVER_URL := "wss://CHANGE-ME.up.railway.app"
+const SERVER_URL := "wss://towerwars-ios-production.up.railway.app"
 const W := 720.0
 const TW := 360.0
 const BLOCK_H := 48.0
