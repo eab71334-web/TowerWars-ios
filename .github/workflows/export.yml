@@ -21,17 +21,19 @@ jobs:
           version: 4.3.0
           use-dotnet: false
 
-      - name: Download and Extract Godot iOS Export Templates
+      - name: Download and Prepare Export Templates
         run: |
           TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
           mkdir -p "$TEMPLATE_DIR"
           
-          # تحميل وفك قالب التصدير الرسمي لـ Godot 4.3
+          # تحميل حزمة قوالب التصدير الرسمية لـ Godot 4.3
           curl -L -o /tmp/templates.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-          unzip -q /tmp/templates.tpz -d /tmp/godot_templates
           
-          # نسخ ملف ios.zip مباشرة إلى المجلد الصحيح لكي يعترف به المحرك
-          cp /tmp/godot_templates/templates/ios.zip "$TEMPLATE_DIR/"
+          # فك الحزمة ونقل جميع القوالب ومفتاح ios.zip إلى مجلد Godot
+          unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+          cp -r /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
+          
+          # طباعة قائمة الملفات للتأكد من المجلد
           ls -la "$TEMPLATE_DIR"
 
       - name: Import Godot Assets
