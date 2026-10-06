@@ -29,17 +29,14 @@ jobs:
           TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p "$TEMPLATE_DIR"
 
-          # دوّر على ios.zip في أي مكان
           FOUND=$(find "$HOME" -name "ios.zip" -not -path "*/node_modules/*" 2>/dev/null | head -n 1 || true)
           echo "Found: $FOUND"
 
           if [ -z "$FOUND" ]; then
-            echo "Downloading templates manually..."
             curl -fL -o /tmp/templates.tpz \
               "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
             unzip -q /tmp/templates.tpz -d /tmp/godot_templates
             cp -r /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
-            FOUND="$TEMPLATE_DIR/ios.zip"
           elif [ ! -f "$TEMPLATE_DIR/ios.zip" ]; then
             cp "$FOUND" "$TEMPLATE_DIR/ios.zip"
           fi
@@ -47,6 +44,23 @@ jobs:
           test -f "$TEMPLATE_DIR/ios.zip"
           echo "IOS_ZIP=$TEMPLATE_DIR/ios.zip" >> "$GITHUB_ENV"
           ls -la "$TEMPLATE_DIR"
+
+      - name: Fix project settings (ETC2/ASTC)
+        run: |
+          python3 - <<'PY'
+          import re
+          p = "project.godot"
+          s = open(p, encoding="utf-8").read()
+          line = "textures/vram_compression/import_etc2_astc=true"
+          if "textures/vram_compression/import_etc2_astc" in s:
+              s = re.sub(r"textures/vram_compression/import_etc2_astc=.*", line, s)
+          elif "[rendering]" in s:
+              s = s.replace("[rendering]\n", "[rendering]\n\n" + line + "\n", 1)
+          else:
+              s += "\n[rendering]\n\n" + line + "\n"
+          open(p, "w", encoding="utf-8").write(s)
+          PY
+          grep -n "etc2_astc" project.godot
 
       - name: Fix export preset
         run: |
@@ -68,9 +82,11 @@ jobs:
           CODE=$?
           set -e
 
-          echo "=========== FULL EXPORT LOG ==========="
-          cat export.log
-          echo "======================================="
+          echo "=========== CONFIG ERROR (wrapped) ==========="
+          grep -n -A6 -i "configuration errors" export.log | fold -w 55 || true
+          echo "=========== ALL ERRORS (wrapped) ==========="
+          grep -n -i -E "error|invalid|missing|not found|template" export.log | fold -w 55 || true
+          echo "=============================================="
 
           if [ ! -d build/ios/game.xcodeproj ]; then
             echo "Export failed, no xcodeproj created (exit code $CODE)"
