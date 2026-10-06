@@ -8,7 +8,7 @@ extends Control
 @onready var leaderboard_btn: Button = $Buttons/LeaderboardButton
 
 func _ready() -> void:
-	play_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://game.tscn"))
+	play_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://versus.tscn"))
 	training_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://game.tscn"))
 	friends_btn.pressed.connect(func(): print("Friends"))
 	shop_btn.pressed.connect(func(): print("Shop"))
