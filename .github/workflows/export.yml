@@ -23,30 +23,39 @@ jobs:
           use-dotnet: false
           include-templates: true
 
-      - name: Verify iOS export template
+      - name: Prepare iOS export template
         run: |
-          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
           godot --version
-          ls -la "$HOME/Library/Application Support/Godot/export_templates/" || true
+          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATE_DIR"
 
-          if [ ! -f "$TEMPLATE_DIR/ios.zip" ]; then
-            echo "ios.zip not found, downloading templates manually..."
-            mkdir -p "$TEMPLATE_DIR"
+          # دوّر على ios.zip في أي مكان
+          FOUND=$(find "$HOME" -name "ios.zip" -not -path "*/node_modules/*" 2>/dev/null | head -n 1 || true)
+          echo "Found: $FOUND"
+
+          if [ -z "$FOUND" ]; then
+            echo "Downloading templates manually..."
             curl -fL -o /tmp/templates.tpz \
               "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
             unzip -q /tmp/templates.tpz -d /tmp/godot_templates
             cp -r /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
+            FOUND="$TEMPLATE_DIR/ios.zip"
+          elif [ ! -f "$TEMPLATE_DIR/ios.zip" ]; then
+            cp "$FOUND" "$TEMPLATE_DIR/ios.zip"
           fi
 
-          ls -la "$TEMPLATE_DIR"
           test -f "$TEMPLATE_DIR/ios.zip"
+          echo "IOS_ZIP=$TEMPLATE_DIR/ios.zip" >> "$GITHUB_ENV"
+          ls -la "$TEMPLATE_DIR"
 
       - name: Fix export preset
         run: |
+          sed -i '' "s|custom_template/debug=\".*\"|custom_template/debug=\"$IOS_ZIP\"|" export_presets.cfg
+          sed -i '' "s|custom_template/release=\".*\"|custom_template/release=\"$IOS_ZIP\"|" export_presets.cfg
           sed -i '' 's|application/bundle_identifier=".*"|application/bundle_identifier="com.eab71334.towerwars"|' export_presets.cfg
           sed -i '' 's|application/export_project_only=.*|application/export_project_only=true|' export_presets.cfg
-          sed -i '' 's|export_path=".*"|export_path="build/ios/game.xcodeproj"|' export_presets.cfg
-          grep -E "bundle_identifier|team_id|export_path|export_project_only" export_presets.cfg
+          sed -i '' 's|^export_path=".*"|export_path="build/ios/game.xcodeproj"|' export_presets.cfg
+          grep -E "custom_template|bundle_identifier|team_id|export_path|export_project_only|targeted_device" export_presets.cfg
 
       - name: Import Godot Assets
         run: godot --headless --verbose --editor --quit || true
@@ -59,9 +68,9 @@ jobs:
           CODE=$?
           set -e
 
-          echo "=========== EXPORT ERRORS ==========="
-          grep -n -i -B1 -A8 "ERROR" export.log || true
-          echo "====================================="
+          echo "=========== FULL EXPORT LOG ==========="
+          cat export.log
+          echo "======================================="
 
           if [ ! -d build/ios/game.xcodeproj ]; then
             echo "Export failed, no xcodeproj created (exit code $CODE)"
