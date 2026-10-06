@@ -6,6 +6,11 @@ config/name="BlockTower"
 run/main_scene="res://main_menu.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 
+[autoload]
+
+Sfx="*res://audio.gd"
+UI="*res://ui.gd"
+
 [display]
 
 window/size/viewport_width=720
