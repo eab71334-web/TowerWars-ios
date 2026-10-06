@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+env:
+  GODOT_VERSION: "4.5"
+
 jobs:
   export-and-build:
     runs-on: macos-latest
@@ -20,14 +23,57 @@ jobs:
           use-dotnet: false
           include-templates: true
 
-      - name: Import Assets
+      - name: Verify iOS export template
+        run: |
+          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          godot --version
+          ls -la "$HOME/Library/Application Support/Godot/export_templates/" || true
+
+          if [ ! -f "$TEMPLATE_DIR/ios.zip" ]; then
+            echo "ios.zip not found, downloading templates manually..."
+            mkdir -p "$TEMPLATE_DIR"
+            curl -fL -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            unzip -q /tmp/templates.tpz -d /tmp/godot_templates
+            cp -r /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
+          fi
+
+          ls -la "$TEMPLATE_DIR"
+          test -f "$TEMPLATE_DIR/ios.zip"
+
+      - name: Fix export preset
+        run: |
+          sed -i '' 's|application/bundle_identifier=".*"|application/bundle_identifier="com.eab71334.towerwars"|' export_presets.cfg
+          sed -i '' 's|application/export_project_only=.*|application/export_project_only=true|' export_presets.cfg
+          sed -i '' 's|export_path=".*"|export_path="build/ios/game.xcodeproj"|' export_presets.cfg
+          grep -E "bundle_identifier|team_id|export_path|export_project_only" export_presets.cfg
+
+      - name: Import Godot Assets
         run: godot --headless --verbose --editor --quit || true
 
       - name: Export Xcode Project from Godot
         run: |
           mkdir -p build/ios
-          godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj 2>&1 | tee export.log
-          test -d build/ios/game.xcodeproj
+          set +e
+          godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj > export.log 2>&1
+          CODE=$?
+          set -e
+
+          echo "=========== EXPORT ERRORS ==========="
+          grep -n -i -B1 -A8 "ERROR" export.log || true
+          echo "====================================="
+
+          if [ ! -d build/ios/game.xcodeproj ]; then
+            echo "Export failed, no xcodeproj created (exit code $CODE)"
+            exit 1
+          fi
+
+      - name: Upload export log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-log
+          path: export.log
 
       - name: Build Unsigned IPA with Xcode
         run: |
@@ -41,6 +87,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+
           mkdir -p Payload
           cp -r out/Build/Products/Debug-iphoneos/game.app Payload/
           zip -r game.ipa Payload
