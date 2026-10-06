@@ -67,7 +67,7 @@ jobs:
 
           open(p, "w", encoding="utf-8").write(s)
           PY
-          grep -n -E "etc2_astc|rendering_method|run/main_scene" project.godot || true
+          grep -n -E "config/name|etc2_astc|rendering_method|run/main_scene" project.godot || true
 
       - name: Check main scene exists
         run: |
@@ -77,15 +77,13 @@ jobs:
             MAIN=$(grep -E '^run/main_scene=' project.godot | sed -E 's/.*="(.*)"/\1/' || true)
             echo "main_scene: ${MAIN:-NONE}"
             if [ -z "$MAIN" ]; then
-              echo "PROBLEM: no main scene set in project.godot"
+              echo "PROBLEM: no main scene set"
             else
               FILE="${MAIN#res://}"
-              if [ -f "$FILE" ]; then echo "OK: scene file exists"; else echo "PROBLEM: scene file NOT found: $FILE"; fi
+              if [ -f "$FILE" ]; then echo "OK: scene exists"; else echo "PROBLEM: scene NOT found: $FILE"; fi
             fi
-            echo
             echo "=== GDExtension files ==="
             find . -name "*.gdextension" -not -path "./build/*" -not -path "./.git/*" || true
-            echo
             echo "=== Project files ==="
             find . -type f \( -name "*.tscn" -o -name "*.scn" -o -name "*.gd" \) -not -path "./build/*" -not -path "./.git/*" -not -path "./.godot/*" | head -50
           } 2>&1 | tee build/diagnostics.txt | fold -w 55
@@ -104,6 +102,7 @@ jobs:
 
       - name: Export Xcode Project from Godot
         run: |
+          rm -rf build/ios
           mkdir -p build/ios
           set +e
           godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj > export.log 2>&1
@@ -114,55 +113,73 @@ jobs:
           grep -n -i -E "error|invalid|missing|not found" export.log | fold -w 55 || true
           echo "========================================"
 
-          if [ ! -d build/ios/game.xcodeproj ]; then
+          if ! find build/ios -maxdepth 2 -name "*.xcodeproj" | grep -q .; then
             echo "Export failed (exit code $CODE)"
             exit 1
           fi
           ls -la build/ios
-          test -f build/ios/game.pck
+          ls build/ios/*.pck
 
-      - name: Inspect PCK
+      - name: Inspect Xcode project
         run: |
           cd build/ios
           {
-            echo "=== PCK size ==="
-            ls -la game.pck
-            echo
-            echo "=== Files inside PCK (first 60) ==="
-            strings -a game.pck | grep -E "^res://" | sort -u | head -60
-            echo
-            echo "=== Count by type ==="
-            for ext in tscn scn gd png jpg ogg wav glb tres; do
-              n=$(strings -a game.pck | grep -c "\.$ext" || true)
-              echo "$ext: $n"
-            done
-            echo
-            echo "=== Export warnings ==="
-            grep -n -i -E "warning" ../../export.log | head -30
+            echo "=== Files in build/ios ==="
+            ls -la
+            echo "=== xcodeproj found ==="
+            find . -maxdepth 2 -name "*.xcodeproj"
+            PROJ=$(find . -maxdepth 2 -name "*.xcodeproj" | head -n 1)
+            echo "=== Inside $PROJ ==="
+            ls -la "$PROJ"
+            echo "=== pbxproj size ==="
+            ls -la "$PROJ/project.pbxproj" || echo "NO project.pbxproj"
+            echo "=== pbxproj lint ==="
+            plutil -lint "$PROJ/project.pbxproj" || true
+            echo "=== pbxproj head ==="
+            head -n 15 "$PROJ/project.pbxproj" || true
+            echo "=== PCK ==="
+            ls -la *.pck
           } 2>&1 | tee -a ../diagnostics.txt | fold -w 55
 
       - name: Build Unsigned IPA with Xcode
         run: |
           cd build/ios
-          xcodebuild -project game.xcodeproj \
-            -scheme game \
+          PROJ=$(find . -maxdepth 2 -name "*.xcodeproj" -not -path "./out/*" | head -n 1)
+          NAME=$(basename "$PROJ" .xcodeproj)
+          echo "Project: $PROJ"
+          echo "Name: $NAME"
+          test -f "$PROJ/project.pbxproj"
+
+          xcodebuild -list -project "$PROJ" 2>&1 | fold -w 55 || true
+
+          set +e
+          xcodebuild -project "$PROJ" \
+            -scheme "$NAME" \
             -sdk iphoneos \
             -configuration Debug \
             -derivedDataPath out \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build > ../xcodebuild.log 2>&1
+          CODE=$?
+          set -e
 
+          echo "=========== XCODE ERRORS (wrapped) ==========="
+          grep -n -i -E "error|damaged|reason" ../xcodebuild.log | fold -w 55 | head -30 || true
+          echo "=============================================="
+          [ $CODE -eq 0 ] || exit $CODE
+
+          APP=$(find out/Build/Products/Debug-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          echo "App: $APP"
           mkdir -p Payload
-          cp -r out/Build/Products/Debug-iphoneos/game.app Payload/
+          cp -r "$APP" Payload/
           zip -qr game.ipa Payload
 
       - name: Verify IPA contents
         run: |
           cd build/ios
-          echo "--- pck / frameworks inside IPA ---"
-          unzip -l game.ipa | grep -i -E "\.pck|\.dylib|\.framework/|\.gdextension" | fold -w 55 || true
+          unzip -l game.ipa | grep -i -E "\.pck" | fold -w 55 || true
           unzip -l game.ipa | grep -qi "\.pck" || (echo "NO PCK IN IPA" && exit 1)
 
       - name: Upload diagnostics
@@ -172,7 +189,9 @@ jobs:
           name: diagnostics
           path: |
             build/diagnostics.txt
+            build/xcodebuild.log
             export.log
+          if-no-files-found: ignore
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
