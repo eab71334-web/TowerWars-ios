@@ -2,9 +2,7 @@ name: "Export and Build iOS App"
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -18,28 +16,18 @@ jobs:
       - name: Setup Godot Engine
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.3.0
+          version: 4.5.0
           use-dotnet: false
-
-      - name: Download and Install Godot Export Templates
-        run: |
-          TEMPLATE_DIR="$HOME/Library/Application Support/Godot/export_templates/4.3.stable"
-          mkdir -p "$TEMPLATE_DIR"
-          
-          curl -fLO https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-          unzip -q Godot_v4.3-stable_export_templates.tpz -d /tmp/godot_templates
-          cp -r /tmp/godot_templates/templates/* "$TEMPLATE_DIR/"
-          
-          ls -la "$TEMPLATE_DIR"
+          include-templates: true
 
       - name: Import Assets
-        run: |
-          godot --headless --verbose --editor --quit
+        run: godot --headless --verbose --editor --quit || true
 
       - name: Export Xcode Project from Godot
         run: |
           mkdir -p build/ios
-          godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj
+          godot --headless --verbose --export-debug "iOS" build/ios/game.xcodeproj 2>&1 | tee export.log
+          test -d build/ios/game.xcodeproj
 
       - name: Build Unsigned IPA with Xcode
         run: |
@@ -48,14 +36,13 @@ jobs:
             -scheme game \
             -sdk iphoneos \
             -configuration Debug \
+            -derivedDataPath out \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             build
-
           mkdir -p Payload
-          mv build/Debug-iphoneos/game.app Payload/
+          cp -r out/Build/Products/Debug-iphoneos/game.app Payload/
           zip -r game.ipa Payload
 
       - name: Upload IPA Artifact
