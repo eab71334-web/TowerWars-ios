@@ -8,9 +8,9 @@ extends Control
 @onready var leaderboard_btn: Button = $Buttons/LeaderboardButton
 
 func _ready() -> void:
-	play_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://versus.tscn"))
-	training_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://game.tscn"))
-	friends_btn.pressed.connect(func(): print("Friends"))
+	play_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://online.tscn"))
+	training_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://versus.tscn"))
+	friends_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://game.tscn"))
 	shop_btn.pressed.connect(func(): print("Shop"))
 	settings_btn.pressed.connect(func(): print("Settings"))
 	leaderboard_btn.pressed.connect(func(): print("Leaderboard"))
