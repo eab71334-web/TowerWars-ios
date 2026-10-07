@@ -1,6 +1,5 @@
 extends Node2D
 
-const SERVER_URL := "wss://towerwars-ios-production.up.railway.app"
 const ResultOverlay = preload("res://result_overlay.gd")
 const W := 720.0
 const TW := 360.0
@@ -8,7 +7,7 @@ const BLOCK_H := 48.0
 const START_W := 150.0
 const PERFECT_TOL := 8.0
 const ROUND_TIME := 90.0
-const CONNECT_TIMEOUT := 10.0
+const CONNECT_TIMEOUT := 12.0
 const GOLD := Color(1.0, 0.86, 0.2)
 const RED := Color(1.0, 0.4, 0.45)
 const ORANGE := Color(1.0, 0.65, 0.2)
@@ -34,10 +33,10 @@ var base_y := 1100.0
 var vh := 1280.0
 var player: Tower
 var opp: Tower
-var ws := WebSocketPeer.new()
 var state := "connecting"
 var mode := "random"
 var code := ""
+var opp_name := "الخصم"
 var time_left := ROUND_TIME
 var pos_t := 0.0
 var msg_t := 0.0
@@ -51,6 +50,7 @@ var ui: CanvasLayer
 var timer_label: Label
 var opp_score: Label
 var player_score: Label
+var opp_name_label: Label
 var msg_label: Label
 
 func _ready() -> void:
@@ -71,8 +71,10 @@ func _ready() -> void:
 	timer_label = _hud(0.0, 8.0, W, 84, Color.WHITE)
 	opp_score = _hud(0.0, 120.0, TW, 110, CYAN)
 	player_score = _hud(TW, 120.0, TW, 110, GOLD)
-	_hud(0.0, 250.0, TW, 32, Color(1, 1, 1, 0.85)).text = "الخصم"
-	_hud(TW, 250.0, TW, 32, Color(1, 1, 1, 0.85)).text = "أنت"
+	opp_name_label = _hud(0.0, 250.0, TW, 32, Color(1, 1, 1, 0.85))
+	opp_name_label.text = "الخصم"
+	var me_label := _hud(TW, 250.0, TW, 32, Color(1, 1, 1, 0.85))
+	me_label.text = str(Net.profile.get("name", "أنت")) if Net.logged_in() else "أنت"
 	msg_label = _hud(0.0, 330.0, W, 48, Color.WHITE)
 
 	var back := UI.button("القائمة", Color(0.45, 0.35, 0.85), 70, 26)
@@ -84,14 +86,23 @@ func _ready() -> void:
 	_init_tower(player)
 	_init_tower(opp)
 
-	if SERVER_URL.contains("CHANGE-ME"):
-		_fail("لم تضع دومين الخادم\nعدّل SERVER_URL في online.gd")
-		return
+	Net.in_match_scene = true
+	Net.message.connect(_on_msg)
+	Net.connected.connect(_on_connected)
+	Net.disconnected.connect(_on_disc)
 
-	msg_label.text = "جاري الاتصال..."
-	var err := ws.connect_to_url(SERVER_URL)
-	if err != OK:
-		_fail("تعذر الاتصال بالخادم\nرمز الخطأ: %d" % err)
+	if Net.start_pending:
+		Net.start_pending = false
+		var sm := Net.start_msg
+		Net.start_msg = {}
+		_start(sm)
+	elif Net.is_open:
+		_on_connected()
+	else:
+		msg_label.text = "جاري الاتصال..."
+
+func _exit_tree() -> void:
+	Net.in_match_scene = false
 
 func _hud(x: float, y: float, w: float, fs: int, color: Color) -> Label:
 	var l := UI.label("", fs, color, 12)
@@ -112,7 +123,7 @@ func _fail(text: String) -> void:
 	msg_label.text = text + "\nالمس للمحاولة من جديد"
 
 func _leave() -> void:
-	ws.close()
+	Net.send({"t": "leave", "done": state == "over"})
 	get_tree().change_scene_to_file("res://main_menu.tscn")
 
 func _again() -> void:
@@ -120,10 +131,6 @@ func _again() -> void:
 		get_tree().reload_current_scene()
 	else:
 		get_tree().change_scene_to_file("res://friends.tscn")
-
-func _send(d: Dictionary) -> void:
-	if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		ws.send_text(JSON.stringify(d))
 
 func _init_tower(t: Tower) -> void:
 	t.blocks.clear()
@@ -187,7 +194,11 @@ func _update_ui() -> void:
 		opp_score.text = oss
 		_pop(opp_score)
 
-func _start() -> void:
+func _start(m: Dictionary) -> void:
+	var info = m.get("opp", {})
+	if typeof(info) == TYPE_DICTIONARY:
+		opp_name = str(info.get("name", "الخصم"))
+		opp_name_label.text = "%s (م%d)" % [opp_name, int(info.get("level", 1))]
 	_init_tower(player)
 	_init_tower(opp)
 	time_left = ROUND_TIME
@@ -198,17 +209,24 @@ func _start() -> void:
 	Sfx.perfect()
 	_update_ui()
 
-func _on_open() -> void:
+func _on_connected() -> void:
+	if state != "connecting":
+		return
 	state = "waiting"
 	if mode == "create":
-		_send({"t": "create"})
+		Net.send({"t": "create"})
 		msg_label.text = "جاري إنشاء اللعبة..."
 	elif mode == "join":
-		_send({"t": "join", "code": code})
+		Net.send({"t": "join", "code": code})
 		msg_label.text = "جاري الدخول..."
 	else:
-		_send({"t": "find"})
+		Net.send({"t": "find"})
 		msg_label.text = "نبحث عن خصم..."
+
+func _on_disc() -> void:
+	if state == "over" or state == "offline" or state == "error":
+		return
+	_fail("انقطع الاتصال")
 
 func _on_msg(m: Dictionary) -> void:
 	var t: String = str(m.get("t", ""))
@@ -223,9 +241,8 @@ func _on_msg(m: Dictionary) -> void:
 		end_ms = Time.get_ticks_msec()
 		msg_label.size.y = 200.0
 		msg_label.text = "%s\nالمس للرجوع" % str(m.get("m", "خطأ"))
-		ws.close()
 	elif t == "start":
-		_start()
+		_start(m)
 	elif state != "playing":
 		return
 	elif t == "drop":
@@ -265,26 +282,10 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 
-	ws.poll()
-	var st := ws.get_ready_state()
-
-	if st == WebSocketPeer.STATE_OPEN:
-		if state == "connecting":
-			_on_open()
-		while ws.get_available_packet_count() > 0:
-			var m = JSON.parse_string(ws.get_packet().get_string_from_utf8())
-			if typeof(m) == TYPE_DICTIONARY:
-				_on_msg(m)
-	elif st == WebSocketPeer.STATE_CONNECTING:
+	if state == "connecting":
 		connect_t += delta
 		if connect_t > CONNECT_TIMEOUT:
-			ws.close()
-			_fail("الخادم لا يستجيب\nتأكد من الدومين و Railway")
-	elif st == WebSocketPeer.STATE_CLOSED and state != "over":
-		var reason := "انقطع الاتصال"
-		if state == "connecting":
-			reason = "تعذر الاتصال بالخادم\nرمز الإغلاق: %d" % ws.get_close_code()
-		_fail(reason)
+			_fail("تعذر الاتصال بالخادم\nتأكد من الإنترنت")
 
 	if state == "playing":
 		time_left -= delta
@@ -293,7 +294,7 @@ func _process(delta: float) -> void:
 			pos_t -= delta
 			if pos_t <= 0.0:
 				pos_t = 0.1
-				_send({"t": "pos", "x": player.cur_x, "w": player.cur_w, "h": player.hit})
+				Net.send({"t": "pos", "x": player.cur_x, "w": player.cur_w, "h": player.hit})
 		_check_end()
 		var secs := int(ceil(maxf(time_left, 0.0)))
 		timer_label.text = str(secs)
@@ -361,7 +362,7 @@ func _drop() -> void:
 		_spawn_fall(t, t.cur_x, y, t.cur_w, col)
 		t.dead = true
 		Sfx.hit()
-		_send({"t": "dead"})
+		Net.send({"t": "dead"})
 		_say("سقط برجك! ننتظر الخصم", 3.0, RED)
 		_check_end()
 		return
@@ -382,7 +383,7 @@ func _drop() -> void:
 		Sfx.perfect()
 		_say("مضبوط! x%d" % t.combo, 0.9, GOLD)
 		if t.combo % 3 == 0:
-			_send({"t": "atk"})
+			Net.send({"t": "atk"})
 			_say("هجوم على الخصم!", 1.3, ORANGE)
 	else:
 		t.combo = 0
@@ -394,7 +395,7 @@ func _drop() -> void:
 
 	t.blocks.append({"x": nx, "w": nw, "c": col})
 	t.score += 1
-	_send({"t": "drop", "x": nx, "w": nw})
+	Net.send({"t": "drop", "x": nx, "w": nw})
 	_spawn(t, nw)
 	_update_ui()
 
@@ -425,7 +426,8 @@ func _end(result: int, reason: String) -> void:
 	end_ms = Time.get_ticks_msec()
 	msg_t = 0.0
 	msg_label.text = ""
-	ws.close()
+	Net.send({"t": "result", "r": result})
+	Net.send({"t": "leave", "done": true})
 	var title := "تعادل"
 	var col := CYAN
 	if result > 0:
@@ -441,7 +443,7 @@ func _end(result: int, reason: String) -> void:
 	var again_text := "العب مرة ثانية" if mode == "random" else "تحدٍّ جديد"
 	var ov := ResultOverlay.new()
 	add_child(ov)
-	ov.build(title, reason, col, player.score, opp.score, "الخصم", again_text)
+	ov.build(title, reason, col, player.score, opp.score, opp_name, again_text)
 	ov.again_pressed.connect(_again)
 	ov.menu_pressed.connect(_leave)
 
