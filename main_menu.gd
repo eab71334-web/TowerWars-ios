@@ -4,9 +4,14 @@ var tower: Control
 var title: Label
 var toast: Label
 var sound_btn: Button
+var chip: Button
 var t := 0.0
 
 func _ready() -> void:
+	if Net.token == "" and not Net.skipped_login and not Net.logged_in():
+		get_tree().change_scene_to_file("res://login.tscn")
+		return
+
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 40)
@@ -20,14 +25,23 @@ func _ready() -> void:
 	margin.add_child(col)
 
 	var top := HBoxContainer.new()
-	top.alignment = BoxContainer.ALIGNMENT_END
 	col.add_child(top)
+	chip = UI.button("", Color(0.18, 0.52, 1.0), 64, 24)
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	chip.custom_minimum_size = Vector2(300, 64)
+	chip.pressed.connect(_on_profile)
+	top.add_child(chip)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(gap)
 	sound_btn = UI.button("", Color(0.45, 0.3, 0.9), 64, 24)
-	sound_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	sound_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	sound_btn.custom_minimum_size = Vector2(270, 64)
 	sound_btn.pressed.connect(_on_sound)
 	top.add_child(sound_btn)
 	_refresh_sound()
+	_refresh_chip()
+	Net.profile_changed.connect(_refresh_chip)
 
 	title = UI.label("برج الكتل", 112, Color(1.0, 0.86, 0.2), 20)
 	col.add_child(title)
@@ -69,7 +83,7 @@ func _ready() -> void:
 	board.pressed.connect(_on_soon)
 	col.add_child(board)
 
-	col.add_child(UI.label("الإصدار v1.1", 24, Color(1, 1, 1, 0.55), 0))
+	col.add_child(UI.label("الإصدار v1.2", 24, Color(1, 1, 1, 0.55), 0))
 
 	toast = UI.label("", 32, Color.WHITE, 0)
 	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -78,8 +92,7 @@ func _ready() -> void:
 	toast.offset_top = -170.0
 	toast.offset_bottom = -100.0
 	toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	var pill := UI.style(Color(0.1, 0.05, 0.3, 0.92), 30, 0)
-	toast.add_theme_stylebox_override("normal", pill)
+	toast.add_theme_stylebox_override("normal", UI.style(Color(0.1, 0.05, 0.3, 0.92), 30, 0))
 	toast.modulate.a = 0.0
 	add_child(toast)
 
@@ -140,6 +153,20 @@ func _draw_tower() -> void:
 
 func _refresh_sound() -> void:
 	sound_btn.text = "الموسيقى: تشغيل" if Sfx.music_on else "الموسيقى: إيقاف"
+
+func _refresh_chip() -> void:
+	if chip == null:
+		return
+	if Net.logged_in():
+		chip.text = "م%d · %s" % [int(Net.profile.get("level", 1)), str(Net.profile.get("name", ""))]
+	else:
+		chip.text = "تسجيل الدخول"
+
+func _on_profile() -> void:
+	if Net.logged_in():
+		get_tree().change_scene_to_file("res://profile.tscn")
+	else:
+		get_tree().change_scene_to_file("res://login.tscn")
 
 func _on_sound() -> void:
 	Sfx.set_music(not Sfx.music_on)
