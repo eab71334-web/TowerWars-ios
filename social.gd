@@ -35,7 +35,7 @@ func _ready() -> void:
 		var fl := Control.new()
 		fl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		vb.add_child(fl)
-		vb.add_child(_back())
+		vb.add_child(_bottom())
 		return
 
 	var row := HBoxContainer.new()
@@ -81,7 +81,7 @@ func _ready() -> void:
 	list.add_theme_constant_override("separation", 14)
 	scroll.add_child(list)
 
-	vb.add_child(_back())
+	vb.add_child(_bottom())
 
 	Net.message.connect(_on_msg)
 	Net.friends_changed.connect(_rebuild)
@@ -90,8 +90,17 @@ func _ready() -> void:
 
 func _back() -> Button:
 	var b := UI.button("رجوع", Color(0.45, 0.35, 0.85), 90, 30)
-	b.pressed.connect(func(): get_tree().change_scene_to_file("res://friends.tscn"))
+	b.pressed.connect(func(): get_tree().change_scene_to_file("res://main_menu.tscn"))
 	return b
+
+func _bottom() -> Control:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	var code := UI.button("لعبة بكود", BLUE, 90, 28)
+	code.pressed.connect(func(): get_tree().change_scene_to_file("res://friends.tscn"))
+	h.add_child(code)
+	h.add_child(_back())
+	return h
 
 func _search() -> void:
 	var q := search_in.text.strip_edges()
