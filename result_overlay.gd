@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const NavBar = preload("res://navbar.gd")
+
 signal again_pressed
 signal menu_pressed
 
@@ -7,6 +9,16 @@ func _init() -> void:
 	layer = 50
 
 func build(title: String, subtitle: String, accent: Color, mine: int, theirs: int, opp_name: String, again_text: String) -> void:
+	var gained := 0
+	if title == "فزت!":
+		gained = Data.reward_match(1, mine, opp_name == "البوت")
+	elif title == "خسرت":
+		gained = Data.reward_match(-1, mine, opp_name == "البوت")
+	elif title == "تعادل":
+		gained = Data.reward_match(0, mine, opp_name == "البوت")
+	else:
+		gained = Data.take_reward()
+
 	var dim := ColorRect.new()
 	dim.color = Color(0.02, 0.0, 0.12, 0.72)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -22,7 +34,7 @@ func build(title: String, subtitle: String, accent: Color, mine: int, theirs: in
 	sb.content_margin_left = 36.0
 	sb.content_margin_right = 36.0
 	sb.content_margin_top = 40.0
-	sb.content_margin_bottom = 40.0
+	sb.content_margin_bottom = 48.0
 	panel.add_theme_stylebox_override("panel", sb)
 	center.add_child(panel)
 
@@ -39,6 +51,16 @@ func build(title: String, subtitle: String, accent: Color, mine: int, theirs: in
 	vb.add_child(row)
 	row.add_child(_score_box(opp_name, theirs, Color(0.4, 0.9, 1.0)))
 	row.add_child(_score_box("أنت", mine, Color(1.0, 0.86, 0.2)))
+
+	if gained > 0:
+		var rw := HBoxContainer.new()
+		rw.alignment = BoxContainer.ALIGNMENT_CENTER
+		rw.add_theme_constant_override("separation", 12)
+		vb.add_child(rw)
+		rw.add_child(NavBar.icon("coin", 52))
+		var gl := UI.label("+%d عملة" % gained, 44, Color(1.0, 0.86, 0.2), 10)
+		gl.autowrap_mode = TextServer.AUTOWRAP_OFF
+		rw.add_child(gl)
 
 	var again := UI.button(again_text, Color(1.0, 0.58, 0.08), 120, 40)
 	again.pressed.connect(func(): again_pressed.emit())
