@@ -83,7 +83,7 @@ func _ready() -> void:
 	board.pressed.connect(_on_soon)
 	col.add_child(board)
 
-	col.add_child(UI.label("الإصدار v1.2", 24, Color(1, 1, 1, 0.55), 0))
+	col.add_child(UI.label("الإصدار v1.3", 24, Color(1, 1, 1, 0.55), 0))
 
 	toast = UI.label("", 32, Color.WHITE, 0)
 	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -183,7 +183,10 @@ func _on_training() -> void:
 	_go("res://versus.tscn")
 
 func _on_friends() -> void:
-	_go("res://friends.tscn")
+	if Net.logged_in():
+		_go("res://social.tscn")
+	else:
+		_go("res://friends.tscn")
 
 func _on_soon() -> void:
 	toast.text = "قريباً..."
