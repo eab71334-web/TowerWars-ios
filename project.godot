@@ -3,13 +3,14 @@ config_version=5
 [application]
 
 config/name="BlockTower"
-run/main_scene="res://main_menu.tscn"
+run/main_scene="res://splash.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 
 [autoload]
 
 Sfx="*res://audio.gd"
 UI="*res://ui.gd"
+Data="*res://game_data.gd"
 Net="*res://net.gd"
 
 [display]
