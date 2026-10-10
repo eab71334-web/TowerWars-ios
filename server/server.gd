@@ -12,7 +12,7 @@ var rooms := {}
 var pending := {}
 var waiting := -1
 var next_id := 1
-var db := {"next": 100000, "users": {}, "google": {}, "tokens": {}}
+var db := {"next": 100000, "users": {}, "google": {}, "tokens": {}, "accounts": {}}
 var db_path := ""
 var g_id := ""
 var g_secret := ""
@@ -45,7 +45,7 @@ func _load_db() -> void:
 		return
 	var d = JSON.parse_string(f.get_as_text())
 	if typeof(d) == TYPE_DICTIONARY:
-		for k in ["next", "users", "google", "tokens"]:
+		for k in ["next", "users", "google", "tokens", "accounts"]:
 			if d.has(k):
 				db[k] = d[k]
 
@@ -58,7 +58,7 @@ func _process(_delta: float) -> bool:
 	while tcp.is_connection_available():
 		var ws := WebSocketPeer.new()
 		ws.accept_stream(tcp.take_connection())
-		clients[next_id] = {"ws": ws, "peer": -1, "room": "", "user": "", "matched": false, "reported": false, "t0": 0, "gflow": 0}
+		clients[next_id] = {"ws": ws, "peer": -1, "room": "", "user": "", "matched": false, "reported": false, "t0": 0, "gflow": 0, "fails": 0}
 		next_id += 1
 
 	for id in clients.keys():
@@ -155,6 +155,10 @@ func _handle(id: int, text: String) -> void:
 			pass
 		"auth":
 			_auth(id, str(m.get("token", "")))
+		"register":
+			_register(id, str(m.get("user", "")), str(m.get("pass", "")), str(m.get("name", "")))
+		"login":
+			_login(id, str(m.get("user", "")), str(m.get("pass", "")))
 		"g_start":
 			_g_start(id)
 		"logout":
@@ -212,6 +216,71 @@ func _set_name(id: int, n: String) -> void:
 	db.users[me].name = _clean(n)
 	_save_db()
 	_send(id, {"t": "profile", "profile": _pub(me)})
+
+func _issue(id: int, pid: String) -> void:
+	var tok := _new_token()
+	db.tokens[tok] = pid
+	_save_db()
+	clients[id].user = pid
+	_send(id, {"t": "authed", "token": tok, "profile": _pub(pid)})
+	_send(id, _friends_payload(pid))
+
+# ---------- حسابات اسم المستخدم (مؤقتة) ----------
+
+func _hash_pw(pw: String, salt: String) -> String:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update((salt + pw).to_utf8_buffer())
+	return ctx.finish().hex_encode()
+
+func _valid_user(u: String) -> bool:
+	if u.length() < 3 or u.length() > 16:
+		return false
+	for i in u.length():
+		var c := u.unicode_at(i)
+		var ok := (c >= 48 and c <= 57) or (c >= 97 and c <= 122) or c == 95
+		if not ok:
+			return false
+	return true
+
+func _register(id: int, user: String, pw: String, disp: String) -> void:
+	user = user.strip_edges().to_lower()
+	if not _valid_user(user):
+		_send(id, {"t": "acc_err", "m": "اسم المستخدم: 3 إلى 16 حرف إنجليزي صغير أو رقم أو _"})
+		return
+	if pw.length() < 4 or pw.length() > 40:
+		_send(id, {"t": "acc_err", "m": "كلمة السر: 4 أحرف على الأقل"})
+		return
+	if db.accounts.has(user):
+		_send(id, {"t": "acc_err", "m": "اسم المستخدم محجوز، اختر غيره"})
+		return
+	db.next = int(db.next) + 1
+	var pid := str(int(db.next))
+	var salt := _new_token().substr(0, 16)
+	var shown := disp.strip_edges()
+	if shown == "":
+		shown = user
+	db.users[pid] = {"id": pid, "name": _clean(shown), "xp": 0, "wins": 0, "losses": 0, "friends": [], "req": []}
+	db.accounts[user] = {"pid": pid, "salt": salt, "hash": _hash_pw(pw, salt)}
+	_issue(id, pid)
+
+func _login(id: int, user: String, pw: String) -> void:
+	user = user.strip_edges().to_lower()
+	var c: Dictionary = clients[id]
+	if int(c.get("fails", 0)) >= 5:
+		_send(id, {"t": "acc_err", "m": "محاولات كثيرة، أعد فتح اللعبة"})
+		return
+	var good := false
+	if db.accounts.has(user):
+		var a: Dictionary = db.accounts[user]
+		good = _hash_pw(pw, str(a.salt)) == str(a.hash)
+	if not good:
+		c["fails"] = int(c.get("fails", 0)) + 1
+		_send(id, {"t": "acc_err", "m": "اسم المستخدم أو كلمة السر خطأ"})
+		return
+	_issue(id, str(db.accounts[user].pid))
+
+# ---------- Google (للمستقبل) ----------
 
 func _post_form(url: String, fields: Dictionary) -> Dictionary:
 	var req := HTTPRequest.new()
@@ -298,12 +367,7 @@ func _finish_login(id: int, claims: Dictionary) -> void:
 		pid = str(int(db.next))
 		db.users[pid] = {"id": pid, "name": _clean(str(claims.get("name", "لاعب"))), "xp": 0, "wins": 0, "losses": 0, "friends": [], "req": []}
 		db.google[sub] = pid
-	var tok := _new_token()
-	db.tokens[tok] = pid
-	_save_db()
-	clients[id].user = pid
-	_send(id, {"t": "authed", "token": tok, "profile": _pub(pid)})
-	_send(id, _friends_payload(pid))
+	_issue(id, pid)
 
 # ---------- الأصدقاء ----------
 
@@ -342,6 +406,7 @@ func _fr_add(id: int, target: String) -> void:
 			o.req.append(me)
 			_save_db()
 		_notify_user(target, {"t": "fr_in", "from": _pub(me)})
+		_push_user(target)
 		_send(id, {"t": "toast", "m": "تم إرسال طلب الصداقة"})
 
 func _link(a: String, b: String) -> void:
