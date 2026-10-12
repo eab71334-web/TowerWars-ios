@@ -124,13 +124,13 @@ func _fail(text: String) -> void:
 
 func _leave() -> void:
 	Net.send({"t": "leave", "done": state == "over"})
-	get_tree().change_scene_to_file("res://main_menu.tscn")
+	UI.go("res://main_menu.tscn")
 
 func _again() -> void:
 	if mode == "random":
 		get_tree().reload_current_scene()
 	else:
-		get_tree().change_scene_to_file("res://friends.tscn")
+		UI.go("res://friends.tscn")
 
 func _init_tower(t: Tower) -> void:
 	t.blocks.clear()
@@ -150,7 +150,7 @@ func _init_tower(t: Tower) -> void:
 		t.cur_x = (TW - START_W) / 2.0
 
 func _color(t: Tower, i: int) -> Color:
-	return Color.from_hsv(fmod(t.hue + i * 0.045, 1.0), 0.65, 0.95)
+	return Data.block_color(i, t.hue)
 
 func _spawn(t: Tower, w: float) -> void:
 	t.cur_w = w
@@ -341,7 +341,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif state == "error" or state == "offline":
 			if Time.get_ticks_msec() - end_ms > 700:
 				if state == "error":
-					get_tree().change_scene_to_file("res://friends.tscn")
+					UI.go("res://friends.tscn")
 				else:
 					get_tree().reload_current_scene()
 
