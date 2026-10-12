@@ -132,6 +132,11 @@ jobs:
       - name: Import Godot Assets
         run: godot --headless --verbose --editor --quit || true
 
+      - name: Check scripts
+        run: |
+          godot --headless -s res://check.gd 2>&1 | grep -n -i -E "bad|error|parse|done" | fold -w 55 | head -60 || true
+
+
       - name: Export Xcode Project from Godot
         run: |
           rm -rf build/ios
