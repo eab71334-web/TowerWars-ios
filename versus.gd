@@ -72,7 +72,7 @@ func _ready() -> void:
 	var back := UI.button("القائمة", Color(0.45, 0.35, 0.85), 70, 26)
 	back.position = Vector2(20, 20)
 	back.size = Vector2(170, 70)
-	back.pressed.connect(func(): get_tree().change_scene_to_file("res://main_menu.tscn"))
+	back.pressed.connect(func(): UI.go("res://main_menu.tscn"))
 	ui.add_child(back)
 
 	_init_tower(player)
@@ -105,7 +105,7 @@ func _init_tower(t: Tower) -> void:
 	_spawn(t, START_W)
 
 func _color(t: Tower, i: int) -> Color:
-	return Color.from_hsv(fmod(t.hue + i * 0.045, 1.0), 0.65, 0.95)
+	return Data.block_color(i, t.hue)
 
 func _spawn(t: Tower, w: float) -> void:
 	t.cur_w = w
@@ -321,7 +321,7 @@ func _end(result: int, reason: String) -> void:
 	add_child(ov)
 	ov.build(title, reason, col, player.score, bot.score, "البوت", "العب مرة ثانية")
 	ov.again_pressed.connect(func(): get_tree().reload_current_scene())
-	ov.menu_pressed.connect(func(): get_tree().change_scene_to_file("res://main_menu.tscn"))
+	ov.menu_pressed.connect(func(): UI.go("res://main_menu.tscn"))
 
 func _draw() -> void:
 	draw_line(Vector2(TW, 0), Vector2(TW, vh), Color(1, 1, 1, 0.25), 3.0)
