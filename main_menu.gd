@@ -15,7 +15,7 @@ var t := 0.0
 
 func _ready() -> void:
 	if Net.token == "" and not Net.skipped_login and not Net.logged_in():
-		get_tree().change_scene_to_file("res://login.tscn")
+		UI.go("res://login.tscn")
 		return
 
 	var margin := MarginContainer.new()
@@ -262,9 +262,9 @@ func _draw_tower() -> void:
 
 func _on_profile() -> void:
 	if Net.logged_in():
-		get_tree().change_scene_to_file("res://profile.tscn")
+		UI.go("res://profile.tscn")
 	else:
-		get_tree().change_scene_to_file("res://login.tscn")
+		UI.go("res://login.tscn")
 
 func _on_sound() -> void:
 	Sfx.set_music(not Sfx.music_on)
@@ -272,19 +272,19 @@ func _on_sound() -> void:
 
 func _on_play() -> void:
 	Engine.set_meta("mode", "random")
-	get_tree().change_scene_to_file("res://online.tscn")
+	UI.go("res://online.tscn")
 
 func _on_friends() -> void:
 	if Net.logged_in():
-		get_tree().change_scene_to_file("res://social.tscn")
+		UI.go("res://social.tscn")
 	else:
-		get_tree().change_scene_to_file("res://friends.tscn")
+		UI.go("res://friends.tscn")
 
 func _on_bot() -> void:
-	get_tree().change_scene_to_file("res://versus.tscn")
+	UI.go("res://versus.tscn")
 
 func _on_modes() -> void:
-	get_tree().change_scene_to_file("res://modes.tscn")
+	UI.go("res://modes.tscn")
 
 func _on_soon() -> void:
 	_say("قريباً...")
