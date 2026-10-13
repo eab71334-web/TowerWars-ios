@@ -4,6 +4,12 @@ var bg: Control
 var blocks: Array = []
 var stars: Array = []
 var t := 0.0
+var fade: ColorRect
+var fade_tw: Tween
+var last_scene: Node = null
+var press_pos := Vector2.ZERO
+var moved := 0.0
+var holding := false
 
 func _ready() -> void:
 	layer = -100
@@ -21,12 +27,65 @@ func _ready() -> void:
 		})
 	for i in 45:
 		stars.append({"x": randf(), "y": randf(), "r": randf_range(1.0, 2.6), "p": randf() * TAU})
+	_setup_theme()
+
+	var fl := CanvasLayer.new()
+	fl.layer = 90
+	add_child(fl)
+	fade = ColorRect.new()
+	fade.color = Color(0.03, 0.01, 0.16, 1.0)
+	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.modulate.a = 0.0
+	fl.add_child(fade)
+
+func _setup_theme() -> void:
+	var th := Theme.new()
+	var e := StyleBoxEmpty.new()
+	for c in ["VScrollBar", "HScrollBar"]:
+		for s in ["scroll", "scroll_focus", "grabber", "grabber_highlight", "grabber_pressed"]:
+			th.set_stylebox(s, c, e)
+	get_tree().root.theme = th
 
 func _size() -> Vector2:
 	var s := get_viewport().get_visible_rect().size
 	if s.x < 10.0:
 		return Vector2(720, 1280)
 	return s
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.pressed:
+			press_pos = event.position
+			moved = 0.0
+			holding = true
+		else:
+			holding = false
+	elif event is InputEventMouseMotion and holding:
+		moved = maxf(moved, (event.position - press_pos).length())
+
+func tapped() -> bool:
+	return moved < 22.0
+
+func guard(c: Callable) -> Callable:
+	return func():
+		if tapped():
+			c.call()
+
+func go(path: String) -> bool:
+	var err := get_tree().change_scene_to_file(path)
+	if err != OK:
+		Net.toast("تعذر فتح %s (رمز %d)" % [path.get_file(), err])
+		Sfx.hit()
+		return false
+	return true
+
+func _fade_in() -> void:
+	if fade_tw:
+		fade_tw.kill()
+	fade.modulate.a = 0.85
+	fade_tw = create_tween()
+	fade_tw.tween_property(fade, "modulate:a", 0.0, 0.25)
 
 func _process(delta: float) -> void:
 	t += delta
@@ -37,6 +96,10 @@ func _process(delta: float) -> void:
 			b.y = sz.y + 20.0
 			b.x = randf() * sz.x
 	bg.queue_redraw()
+	var cs := get_tree().current_scene
+	if cs != null and cs != last_scene:
+		last_scene = cs
+		_fade_in()
 
 func _draw_bg() -> void:
 	var sz := _size()
@@ -88,7 +151,9 @@ func button(text: String, color: Color, height: float, font_size: int) -> Button
 	b.add_theme_color_override("font_outline_color", color.darkened(0.55))
 	b.add_theme_constant_override("outline_size", 8)
 	b.resized.connect(func(): b.pivot_offset = b.size / 2.0)
-	b.pressed.connect(func(): Sfx.click())
+	b.pressed.connect(func():
+		if tapped():
+			Sfx.click())
 	return b
 
 func label(text: String, font_size: int, color: Color, outline: int) -> Label:
