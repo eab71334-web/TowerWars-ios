@@ -51,21 +51,34 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and t > 0.6:
 		if diag_shown:
-			UI.go("res://main_menu.tscn")
+			_open_menu()
 		else:
 			_next()
 
+func _has(node_name: String, method: String) -> bool:
+	var n := get_node_or_null("/root/" + node_name)
+	return n != null and n.has_method(method)
+
 func _problems() -> Array:
 	var out: Array = []
+	for pair in [["UI", "go"], ["UI", "tapped"], ["UI", "guard"], ["UI", "style"], ["Data", "block_color"], ["Data", "reward_match"], ["Net", "toast"], ["Net", "send"], ["Sfx", "click"]]:
+		if not _has(str(pair[0]), str(pair[1])):
+			out.append("%s.%s ناقص (ملف %s قديم أو معطوب)" % [pair[0], pair[1], str(pair[0]).to_lower()])
 	for n in CHECK_SCRIPTS:
 		var s = load("res://%s.gd" % n)
 		if s == null or not s.can_instantiate():
-			out.append("%s.gd (فيه خطأ)" % n)
+			out.append("%s.gd فيه خطأ" % n)
 	for n in CHECK_SCENES:
 		var sc = load("res://%s.tscn" % n)
 		if sc == null or not sc.can_instantiate():
-			out.append("%s.tscn (ناقص)" % n)
+			out.append("%s.tscn ناقص أو معطوب" % n)
 	return out
+
+func _open_menu() -> void:
+	var err := get_tree().change_scene_to_file("res://main_menu.tscn")
+	if err != OK:
+		load_label.text = "تعذر فتح القائمة، رمز الخطأ: %d" % err
+		load_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
 
 func _next() -> void:
 	if went:
@@ -74,13 +87,13 @@ func _next() -> void:
 	var bad := _problems()
 	if bad.size() > 0:
 		diag_shown = true
-		var l := UI.label("ملفات فيها مشكلة:\n" + "\n".join(bad) + "\n\nصوّر الشاشة، ثم المس للمتابعة", 34, Color(1.0, 0.65, 0.65), 8)
+		var l := UI.label("مشاكل وُجدت:\n" + "\n".join(bad) + "\n\nصوّر الشاشة، ثم المس للمتابعة", 30, Color(1.0, 0.65, 0.65), 6)
 		l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		l.add_theme_stylebox_override("normal", UI.style(Color(0.05, 0.02, 0.2, 0.97), 0, 0))
 		add_child(l)
 		return
-	UI.go("res://main_menu.tscn")
+	_open_menu()
 
 func _burst(pos: Vector2, n: int, c: Color, spd: float) -> void:
 	for i in n:
