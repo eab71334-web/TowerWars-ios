@@ -3,6 +3,8 @@ extends Control
 const GOLD := Color(1.0, 0.86, 0.2)
 const SLOTS := 7
 const WIDTHS := [260.0, 240.0, 226.0, 204.0, 182.0, 154.0, 124.0]
+const CHECK_SCRIPTS := ["main_menu", "navbar", "icon_node", "ui", "game_data", "net", "audio", "result_overlay", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus"]
+const CHECK_SCENES := ["main_menu", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus"]
 
 var t := 0.0
 var vw := 720.0
@@ -17,6 +19,7 @@ var load_label: Label
 var flash_t := -1.0
 var revealed := false
 var went := false
+var diag_shown := false
 
 func _ready() -> void:
 	var s := get_viewport_rect().size
@@ -47,13 +50,37 @@ func _ready() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and t > 0.6:
-		_next()
+		if diag_shown:
+			UI.go("res://main_menu.tscn")
+		else:
+			_next()
+
+func _problems() -> Array:
+	var out: Array = []
+	for n in CHECK_SCRIPTS:
+		var s = load("res://%s.gd" % n)
+		if s == null or not s.can_instantiate():
+			out.append("%s.gd (فيه خطأ)" % n)
+	for n in CHECK_SCENES:
+		var sc = load("res://%s.tscn" % n)
+		if sc == null or not sc.can_instantiate():
+			out.append("%s.tscn (ناقص)" % n)
+	return out
 
 func _next() -> void:
 	if went:
 		return
 	went = true
-	get_tree().change_scene_to_file("res://main_menu.tscn")
+	var bad := _problems()
+	if bad.size() > 0:
+		diag_shown = true
+		var l := UI.label("ملفات فيها مشكلة:\n" + "\n".join(bad) + "\n\nصوّر الشاشة، ثم المس للمتابعة", 34, Color(1.0, 0.65, 0.65), 8)
+		l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.add_theme_stylebox_override("normal", UI.style(Color(0.05, 0.02, 0.2, 0.97), 0, 0))
+		add_child(l)
+		return
+	UI.go("res://main_menu.tscn")
 
 func _burst(pos: Vector2, n: int, c: Color, spd: float) -> void:
 	for i in n:
