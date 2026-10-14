@@ -118,7 +118,7 @@ func _ready() -> void:
 	cards.append(_card("friends", "تحدي الأصدقاء", "العب ضد صديقك", Color(0.18, 0.52, 1.0), _on_friends))
 	cards.append(_card("bot", "ضد البوت", "تدريب بدون إنترنت", Color(0.15, 0.75, 0.42), _on_bot))
 	cards.append(_card("bolt", "الأنماط", "6 أنماط مختلفة", Color(0.95, 0.3, 0.65), _on_modes))
-	cards.append(_card("trophy", "المتصدرون", "قريباً", Color(0.95, 0.68, 0.08), _on_soon))
+	cards.append(_card("star", "القدرات", "قدرات خارقة", Color(0.6, 0.4, 1.0), _on_powers))
 	for c in cards:
 		grid.add_child(c)
 
@@ -285,6 +285,9 @@ func _on_bot() -> void:
 
 func _on_modes() -> void:
 	UI.go("res://modes.tscn")
+
+func _on_powers() -> void:
+	UI.go("res://power_shop.tscn")
 
 func _on_soon() -> void:
 	_say("قريباً...")
