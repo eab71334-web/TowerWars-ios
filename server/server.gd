@@ -1,6 +1,6 @@
 extends SceneTree
 
-const RELAY := ["drop", "pos", "atk", "dead"]
+const RELAY := ["drop", "pos", "atk", "dead", "pw"]
 const GOOGLE_DEVICE := "https://oauth2.googleapis.com/device/code"
 const GOOGLE_TOKEN := "https://oauth2.googleapis.com/token"
 const CH_TIMEOUT_MS := 30000
@@ -225,7 +225,7 @@ func _issue(id: int, pid: String) -> void:
 	_send(id, {"t": "authed", "token": tok, "profile": _pub(pid)})
 	_send(id, _friends_payload(pid))
 
-# ---------- حسابات اسم المستخدم (مؤقتة) ----------
+# ---------- حسابات اسم المستخدم ----------
 
 func _hash_pw(pw: String, salt: String) -> String:
 	var ctx := HashingContext.new()
