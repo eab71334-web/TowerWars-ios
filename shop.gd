@@ -49,6 +49,10 @@ func _ready() -> void:
 	head.add_child(tl)
 	vb.add_child(UI.label("اشترِ ألوان جديدة لكتلك بعملات تكسبها من المباريات والتحديات", 24, Color(0.75, 0.95, 1.0), 4))
 
+	var pw_btn := UI.button("القدرات الخارقة", Color(0.6, 0.4, 1.0), 90, 34)
+	pw_btn.pressed.connect(UI.guard(func(): UI.go("res://power_shop.tscn")))
+	vb.add_child(pw_btn)
+
 	grid = GridContainer.new()
 	grid.columns = 2
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
