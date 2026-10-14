@@ -1,6 +1,9 @@
 extends Node2D
 
 const ResultOverlay = preload("res://result_overlay.gd")
+const PW = preload("res://powers.gd")
+const PowerFx = preload("res://power_fx.gd")
+const PowerHud = preload("res://power_hud.gd")
 const W := 720.0
 const TW := 360.0
 const BLOCK_H := 48.0
@@ -29,7 +32,7 @@ class Tower:
 	var ox := 0.0
 	var hue := 0.0
 
-var base_y := 1100.0
+var base_y := 1000.0
 var vh := 1280.0
 var player: Tower
 var opp: Tower
@@ -45,8 +48,12 @@ var connect_t := 0.0
 var shake_t := 0.0
 var flash := 0.0
 var last_sec := -1
+var fx_me = PowerFx.new()
+var cool: Dictionary = {}
+var grow_active := false
 
 var ui: CanvasLayer
+var hud: Control
 var timer_label: Label
 var opp_score: Label
 var player_score: Label
@@ -55,7 +62,7 @@ var msg_label: Label
 
 func _ready() -> void:
 	vh = get_viewport_rect().size.y
-	base_y = vh - 160.0
+	base_y = vh - 215.0
 	mode = str(Engine.get_meta("mode", "random"))
 	code = str(Engine.get_meta("code", ""))
 
@@ -82,6 +89,12 @@ func _ready() -> void:
 	back.size = Vector2(170, 70)
 	back.pressed.connect(_leave)
 	ui.add_child(back)
+
+	hud = PowerHud.new()
+	ui.add_child(hud)
+	hud.build(W, vh - 135.0)
+	hud.pressed.connect(_use_power)
+	hud.visible = false
 
 	_init_tower(player)
 	_init_tower(opp)
@@ -118,6 +131,7 @@ func _pop(l: Label) -> void:
 
 func _fail(text: String) -> void:
 	state = "offline"
+	hud.visible = false
 	end_ms = Time.get_ticks_msec()
 	msg_label.size.y = 220.0
 	msg_label.text = text + "\nالمس للمحاولة من جديد"
@@ -171,6 +185,8 @@ func _speed(t: Tower) -> float:
 	var s := 180.0 + minf(t.score * 6.0, 260.0)
 	if t.hit:
 		s *= 1.5
+	if t == player:
+		s *= fx_me.speed_mult()
 	return s
 
 func _say(text: String, secs: float, color: Color = Color.WHITE) -> void:
@@ -194,6 +210,65 @@ func _update_ui() -> void:
 		opp_score.text = oss
 		_pop(opp_score)
 
+# ---------- القدرات ----------
+
+func _grow_block(t: Tower) -> void:
+	var nw := minf(t.cur_w * 1.8, TW)
+	t.cur_x = clampf(t.cur_x - (nw - t.cur_w) / 2.0, 0.0, TW - nw)
+	t.cur_w = nw
+
+func _narrow_block(t: Tower) -> void:
+	var nw := maxf(40.0, t.cur_w * 0.62)
+	t.cur_x += (t.cur_w - nw) / 2.0
+	t.cur_w = nw
+
+func _use_power(id: String) -> void:
+	if state != "playing" or player.dead:
+		return
+	var d: Dictionary = PW.def(id)
+	if d.is_empty():
+		return
+	if PW.count(id) <= 0:
+		Sfx.hit()
+		_say("انتهت هذه القدرة، اشترِ المزيد من القدرات", 1.6, RED)
+		return
+	if str(d.kind) == "self":
+		if fx_me.active(id) or (id == "grow" and grow_active):
+			_say("مفعّلة بالفعل", 1.0, ORANGE)
+			return
+		PW.use(id)
+		if id == "grow":
+			grow_active = true
+			_grow_block(player)
+		else:
+			fx_me.start(id)
+	else:
+		if float(cool.get(id, 0.0)) > 0.0:
+			return
+		PW.use(id)
+		cool[id] = 3.0
+		Net.send({"t": "pw", "id": id})
+	Sfx.perfect()
+	_say("استخدمت: %s" % str(d.name), 1.2, GOLD)
+
+func _receive_power(id: String) -> void:
+	var d: Dictionary = PW.def(id)
+	if d.is_empty() or str(d.kind) != "enemy":
+		return
+	if fx_me.shield:
+		fx_me.shield = false
+		Sfx.perfect()
+		_say("درعك صدّ قدرة الخصم!", 1.6, CYAN)
+		return
+	if id == "narrow":
+		_narrow_block(player)
+	else:
+		fx_me.start(id)
+	_hit_fx()
+	_say("الخصم استخدم: %s" % str(d.name), 1.6, RED)
+
+# ---------- الشبكة ----------
+
 func _start(m: Dictionary) -> void:
 	var info = m.get("opp", {})
 	if typeof(info) == TYPE_DICTIONARY:
@@ -201,6 +276,10 @@ func _start(m: Dictionary) -> void:
 		opp_name_label.text = "%s (م%d)" % [opp_name, int(info.get("level", 1))]
 	_init_tower(player)
 	_init_tower(opp)
+	fx_me = PowerFx.new()
+	cool = {}
+	grow_active = false
+	hud.visible = true
 	time_left = ROUND_TIME
 	last_sec = -1
 	state = "playing"
@@ -254,9 +333,16 @@ func _on_msg(m: Dictionary) -> void:
 		opp.cur_w = float(m["w"])
 		opp.hit = bool(m["h"])
 	elif t == "atk":
-		player.attack += 1
-		_hit_fx()
-		_say("الخصم هاجمك!", 1.3, RED)
+		if fx_me.shield:
+			fx_me.shield = false
+			Sfx.perfect()
+			_say("درعك صدّ الهجوم!", 1.4, CYAN)
+		else:
+			player.attack += 1
+			_hit_fx()
+			_say("الخصم هاجمك!", 1.3, RED)
+	elif t == "pw":
+		_receive_power(str(m.get("id", "")))
 	elif t == "dead":
 		opp.dead = true
 		_say("سقط برج الخصم!", 2.0, GOLD)
@@ -289,6 +375,10 @@ func _process(delta: float) -> void:
 
 	if state == "playing":
 		time_left -= delta
+		fx_me.tick(delta)
+		for k in cool.keys():
+			cool[k] = maxf(0.0, float(cool[k]) - delta)
+		hud.refresh(fx_me, cool)
 		if not player.dead:
 			_move(player, delta)
 			pos_t -= delta
@@ -352,6 +442,9 @@ func _spawn_fall(t: Tower, x: float, y: float, w: float, c: Color) -> void:
 func _drop() -> void:
 	var t := player
 	var top: Dictionary = t.blocks.back()
+	if fx_me.magnet:
+		fx_me.magnet = false
+		t.cur_x = clampf(top.x + top.w / 2.0 - t.cur_w / 2.0, 0.0, TW - t.cur_w)
 	var y := base_y - t.blocks.size() * BLOCK_H
 	var col := _color(t, t.blocks.size())
 	var left := maxf(t.cur_x, top.x)
@@ -361,6 +454,8 @@ func _drop() -> void:
 	if ow <= 0.0:
 		_spawn_fall(t, t.cur_x, y, t.cur_w, col)
 		t.dead = true
+		grow_active = false
+		hud.visible = false
 		Sfx.hit()
 		Net.send({"t": "dead"})
 		_say("سقط برجك! ننتظر الخصم", 3.0, RED)
@@ -393,6 +488,12 @@ func _drop() -> void:
 		else:
 			_spawn_fall(t, right, y, (t.cur_x + t.cur_w) - right, col)
 
+	if grow_active:
+		grow_active = false
+		if nw > top.w:
+			nx += (nw - top.w) / 2.0
+			nw = top.w
+
 	t.blocks.append({"x": nx, "w": nw, "c": col})
 	t.score += 1
 	Net.send({"t": "drop", "x": nx, "w": nw})
@@ -423,6 +524,7 @@ func _end(result: int, reason: String) -> void:
 	if state == "over":
 		return
 	state = "over"
+	hud.visible = false
 	end_ms = Time.get_ticks_msec()
 	msg_t = 0.0
 	msg_label.text = ""
@@ -454,6 +556,26 @@ func _draw() -> void:
 	if flash > 0.0:
 		draw_rect(Rect2(-40, -40, W + 80, vh + 80), Color(1.0, 0.1, 0.1, flash * 0.3))
 
+func _draw_fx_outline(r: Rect2) -> void:
+	var oc := Color(0, 0, 0, 0)
+	if fx_me.active("slow"):
+		oc = Color(0.4, 0.85, 1.0)
+	elif fx_me.active("fast") or fx_me.active("jitter"):
+		oc = Color(1.0, 0.6, 0.2)
+	elif fx_me.magnet:
+		oc = Color(0.75, 0.5, 1.0)
+	elif grow_active:
+		oc = Color(0.4, 1.0, 0.55)
+	if oc.a > 0.0:
+		draw_rect(r.grow(4.0), oc, false, 4.0)
+
+func _draw_fog(ox: float, y2: float) -> void:
+	var a := clampf(float(fx_me.timers["fog"]) / 0.5, 0.0, 1.0) * 0.9
+	draw_rect(Rect2(ox, y2 - 120.0, TW, 230.0), Color(0.78, 0.86, 1.0, a))
+	for i in 5:
+		var cx := ox + fposmod(float(i) * 97.0 + fx_me.clock * 34.0, TW)
+		draw_circle(Vector2(cx, y2 - 40.0 + float(i) * 22.0), 62.0, Color(1, 1, 1, a * 0.55))
+
 func _draw_tower(t: Tower) -> void:
 	var sx := 0.0
 	if t.shake > 0.0:
@@ -473,5 +595,10 @@ func _draw_tower(t: Tower) -> void:
 		var c := _color(t, t.blocks.size())
 		if t.hit:
 			c = Color(1.0, 0.25, 0.25)
-		draw_rect(Rect2(ox + t.cur_x, y2, t.cur_w, BLOCK_H - 3.0), c)
+		var r := Rect2(ox + t.cur_x, y2, t.cur_w, BLOCK_H - 3.0)
+		draw_rect(r, c)
 		draw_rect(Rect2(ox + t.cur_x, y2, t.cur_w, 6.0), c.lightened(0.3))
+		if t == player:
+			_draw_fx_outline(r)
+			if fx_me.active("fog"):
+				_draw_fog(ox, y2)
