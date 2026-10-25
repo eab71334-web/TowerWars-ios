@@ -6,7 +6,7 @@ const MAX_LOADOUT := 3
 const STARTER := ["slow", "fast", "grow"]
 const STARTER_COUNT := 10
 
-static var LIST: Array = [
+const LIST: Array = [
 	{"id": "slow", "name": "تباطؤ", "kind": "self", "price": 80, "color": Color(0.2, 0.7, 1.0),
 		"desc": "كتلتك تتحرك أبطأ بكثير لمدة 5 ثوانٍ",
 		"how": "اضغط الزر فتتباطأ كتلتك إلى أقل من النصف لمدة 5 ثوانٍ، فيسهل عليك ضبطها فوق البرج بدقة.",
@@ -45,6 +45,12 @@ static var counts: Dictionary = {}
 static var loadout: Array = []
 static var _loaded := false
 
+static func _data() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("Data")
+
 static func _ensure() -> void:
 	if _loaded:
 		return
@@ -55,8 +61,8 @@ static func _ensure() -> void:
 		loadout = Array(cf.get_value("p", "loadout", []))
 		if bool(cf.get_value("p", "started", false)):
 			return
-	for id in STARTER:
-		counts[id] = int(counts.get(id, 0)) + STARTER_COUNT
+	for sid in STARTER:
+		counts[sid] = int(counts.get(sid, 0)) + STARTER_COUNT
 	loadout = STARTER.duplicate()
 	_save()
 
@@ -68,9 +74,9 @@ static func _save() -> void:
 	cf.save(SAVE_PATH)
 
 static func def(id: String) -> Dictionary:
-	for d in LIST:
-		if str(d.id) == id:
-			return d
+	for item in LIST:
+		if str(item["id"]) == id:
+			return item
 	return {}
 
 static func count(id: String) -> int:
@@ -88,14 +94,17 @@ static func use(id: String) -> bool:
 
 static func buy(id: String) -> bool:
 	_ensure()
-	var d := def(id)
-	if d.is_empty():
+	var item := def(id)
+	if item.is_empty():
 		return false
-	var price := int(d.price)
-	if Data.coins < price:
+	var dt := _data()
+	if dt == null:
 		return false
-	Data.add_coins(-price)
-	Data._save()
+	var price := int(item["price"])
+	if int(dt.coins) < price:
+		return false
+	dt.add_coins(-price)
+	dt._save()
 	counts[id] = count(id) + PACK
 	_save()
 	return true
@@ -103,9 +112,9 @@ static func buy(id: String) -> bool:
 static func get_loadout() -> Array:
 	_ensure()
 	var out: Array = []
-	for id in loadout:
-		if not def(str(id)).is_empty() and not out.has(str(id)):
-			out.append(str(id))
+	for lid in loadout:
+		if not def(str(lid)).is_empty() and not out.has(str(lid)):
+			out.append(str(lid))
 	return out.slice(0, MAX_LOADOUT)
 
 static func toggle(id: String) -> String:
