@@ -3,8 +3,8 @@ extends Control
 const GOLD := Color(1.0, 0.86, 0.2)
 const SLOTS := 7
 const WIDTHS := [260.0, 240.0, 226.0, 204.0, 182.0, 154.0, 124.0]
-const CHECK_SCRIPTS := ["main_menu", "navbar", "icon_node", "ui", "game_data", "net", "audio", "result_overlay", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus"]
-const CHECK_SCENES := ["main_menu", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus"]
+const CHECK_SCRIPTS := ["main_menu", "navbar", "icon_node", "ui", "game_data", "net", "audio", "result_overlay", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus", "powers", "power_fx", "power_icon", "power_hud", "power_help", "power_shop", "leaderboard"]
+const CHECK_SCENES := ["main_menu", "shop", "challenges", "modes", "solo", "social", "profile", "login", "friends", "online", "versus", "power_shop", "leaderboard"]
 
 var t := 0.0
 var vw := 720.0
@@ -65,13 +65,21 @@ func _problems() -> Array:
 		if not _has(str(pair[0]), str(pair[1])):
 			out.append("%s.%s ناقص (ملف %s قديم أو معطوب)" % [pair[0], pair[1], str(pair[0]).to_lower()])
 	for n in CHECK_SCRIPTS:
-		var s = load("res://%s.gd" % n)
+		var path := "res://%s.gd" % n
+		if not ResourceLoader.exists(path):
+			out.append("%s.gd غير موجود في الريبو" % n)
+			continue
+		var s = load(path)
 		if s == null or not s.can_instantiate():
-			out.append("%s.gd فيه خطأ" % n)
+			out.append("%s.gd فيه خطأ كتابة" % n)
 	for n in CHECK_SCENES:
-		var sc = load("res://%s.tscn" % n)
+		var spath := "res://%s.tscn" % n
+		if not ResourceLoader.exists(spath):
+			out.append("%s.tscn غير موجود في الريبو" % n)
+			continue
+		var sc = load(spath)
 		if sc == null or not sc.can_instantiate():
-			out.append("%s.tscn ناقص أو معطوب" % n)
+			out.append("%s.tscn يعتمد على ملف معطوب" % n)
 	return out
 
 func _open_menu() -> void:
@@ -87,7 +95,7 @@ func _next() -> void:
 	var bad := _problems()
 	if bad.size() > 0:
 		diag_shown = true
-		var l := UI.label("مشاكل وُجدت:\n" + "\n".join(bad) + "\n\nصوّر الشاشة، ثم المس للمتابعة", 30, Color(1.0, 0.65, 0.65), 6)
+		var l := UI.label("مشاكل وُجدت:\n" + "\n".join(bad) + "\n\nصوّر الشاشة، ثم المس للمتابعة", 28, Color(1.0, 0.65, 0.65), 6)
 		l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		l.add_theme_stylebox_override("normal", UI.style(Color(0.05, 0.02, 0.2, 0.97), 0, 0))
